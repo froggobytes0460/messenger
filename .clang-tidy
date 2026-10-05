@@ -1,0 +1,12 @@
+---
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  misc-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -readability-identifier-length,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+
+WarningsAsErrors: 'bugprone-*,cert-dcl*,cert-msc*'
