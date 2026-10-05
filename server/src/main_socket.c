@@ -1,0 +1,61 @@
+#include <netdb.h>
+#include <server/constants.h>
+#include <server/main_socket.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sysexits.h>
+#include <unistd.h>
+
+int get_main_socket(unsigned short port) {
+  struct addrinfo hints;
+  struct addrinfo *res;
+  struct addrinfo *p;
+  int sockfd;
+
+  // Convert port to string.
+  char port_str[MAX_PORT_STR_LEN];
+  (void)snprintf(port_str, sizeof(port_str), "%hu", port);
+
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+
+  int status = getaddrinfo(NULL, port_str, &hints, &res);
+  if (status != 0) {
+    (void)fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+    exit(EX_NOHOST);
+  }
+
+  for (p = res; p != NULL; p = p->ai_next) {
+    sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+    if (sockfd == -1) {
+      continue;
+    }
+
+    // Allow reconnection shortly after disconnection.
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int))) {
+      perror("setsockopt");
+      close(sockfd);
+      freeaddrinfo(res);
+      exit(EX_OSERR);
+    }
+
+    if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+      close(sockfd);
+      continue;
+    }
+
+    break;
+  }
+
+  if (p == NULL) {
+    (void)fprintf(stderr, "Server Error: Failed to bind any address.\n");
+    freeaddrinfo(res);
+    exit(EX_UNAVAILABLE);
+  }
+
+  freeaddrinfo(res);
+  return sockfd;
+}

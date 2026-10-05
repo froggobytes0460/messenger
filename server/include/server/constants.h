@@ -1,0 +1,9 @@
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
+
+#define MAX_PORT_STR_LEN 7
+#define DECIMAL_INTEGER_BASE 10
+#define PORT_NUMBER_DEFAULT 8000
+#define BACKLOG_DEAULT 10
+
+#endif // !CONSTANTS_H
