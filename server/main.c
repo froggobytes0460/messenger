@@ -6,6 +6,8 @@ int main(int argc, char *argv[]) {
   parse_args(&cli_args, argc, argv);
 
   printf("Server Initialized...\n");
+  printf("Listening on port: %hu\nLength of backlog: %u\n", cli_args.portNumber,
+         cli_args.backlog);
 
   return 0;
 }
