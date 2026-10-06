@@ -11,8 +11,6 @@
 int get_main_socket(unsigned short port) {
   struct addrinfo hints;
   struct addrinfo *res;
-  struct addrinfo *p;
-  int sockfd;
 
   // Convert port to string.
   char port_str[MAX_PORT_STR_LEN];
@@ -22,11 +20,14 @@ int get_main_socket(unsigned short port) {
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE;
 
-  int status = getaddrinfo(NULL, port_str, &hints, &res);
-  if (status != 0) {
-    (void)fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+  int rc = getaddrinfo(NULL, port_str, &hints, &res);
+  if (rc != 0) {
+    (void)fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rc));
     exit(EX_NOHOST);
   }
+
+  struct addrinfo *p;
+  int sockfd;
 
   for (p = res; p != NULL; p = p->ai_next) {
     sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
