@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <netdb.h>
 #include <server/constants.h>
 #include <server/poll_mgr.h>
@@ -13,6 +14,20 @@
 
 #define HOST_STR_LEN 1025
 #define SERV_STR_LEN 32
+
+static void send_all(int fd, const char *buf, size_t len) {
+  size_t sent = 0;
+  while (sent < len) {
+    ssize_t n = send(fd, buf + sent, len - sent, MSG_NOSIGNAL);
+    if (n == -1) {
+      if (errno == EINTR) { // NOLINT(misc-include-cleaner)
+        continue;
+      }
+      return;
+    }
+    sent += (size_t)n;
+  }
+}
 
 void poll_mgr_init(poll_mgr_t *mgr, int listen_fd) {
   memset(mgr, 0, sizeof(*mgr));
@@ -135,6 +150,17 @@ void poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
                              (size_t)nbytes);
       }
       i++;
+    }
+  }
+}
+
+void poll_mgr_broadcast(poll_mgr_t *mgr, int except_fd, const char *buf,
+                        size_t buf_len) {
+  for (size_t i = 0; i < mgr->nfds; i++) {
+    int recipient_fd = mgr->fds[i].fd;
+
+    if (recipient_fd != except_fd && recipient_fd != mgr->listen_fd) {
+      send_all(recipient_fd, buf, buf_len);
     }
   }
 }

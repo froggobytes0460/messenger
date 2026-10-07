@@ -22,4 +22,7 @@ typedef struct {
 void poll_mgr_init(poll_mgr_t *mgr, int listen_fd);
 void poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks);
 
+void poll_mgr_broadcast(poll_mgr_t *mgr, int except_fd, const char *buf,
+                        size_t buf_len);
+
 #endif // !POLL_MGR_H

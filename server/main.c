@@ -10,36 +10,11 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-static void send_all(int fd, const char *buf, size_t len) {
-  size_t sent = 0;
-  while (sent < len) {
-    ssize_t n = send(fd, buf + sent, len - sent, MSG_NOSIGNAL);
-    if (n == -1) {
-      if (errno == EINTR) { // NOLINT(misc-include-cleaner)
-        continue;
-      }
-      return;
-    }
-    sent += (size_t)n;
-  }
-}
-
-static void broadcast_message(poll_mgr_t *mgr, int sender_fd, const char *buf,
-                              size_t buf_len) {
-  for (size_t i = 0; i < mgr->nfds; i++) {
-    int recipient_fd = mgr->fds[i].fd;
-
-    if (recipient_fd != sender_fd && recipient_fd != mgr->listen_fd) {
-      send_all(recipient_fd, buf, buf_len);
-    }
-  }
-}
-
 static void handle_message(void *ctx, poll_mgr_t *mgr, int sender_fd,
                            const char *buf, size_t len) {
   (void)ctx;
   printf("[Client %d]: %.*s", sender_fd, (int)len, buf);
-  broadcast_message(mgr, sender_fd, buf, len);
+  poll_mgr_broadcast(mgr, sender_fd, buf, len);
 }
 
 static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
@@ -48,7 +23,7 @@ static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
   char msg[BROADCAST_MESSAGE_LENGTH];
   int l_msg = snprintf(msg, sizeof(msg), "User left the chat...\n");
   if (l_msg > 0) {
-    broadcast_message(mgr, client_fd, msg, (size_t)l_msg);
+    poll_mgr_broadcast(mgr, client_fd, msg, (size_t)l_msg);
   }
 }
 
@@ -58,7 +33,7 @@ static void on_connect(void *ctx, poll_mgr_t *mgr, int client_fd) {
   char msg[BROADCAST_MESSAGE_LENGTH];
   int l_msg = snprintf(msg, sizeof(msg), "User joined the chat...\n");
   if (l_msg > 0) {
-    broadcast_message(mgr, client_fd, msg, (size_t)l_msg);
+    poll_mgr_broadcast(mgr, client_fd, msg, (size_t)l_msg);
   }
 }
 
