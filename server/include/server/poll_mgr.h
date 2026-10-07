@@ -6,7 +6,7 @@
 #include <sys/poll.h>
 
 typedef struct {
-  struct pollfd fds[MAX_CONNECTIONS];
+  struct pollfd fds[MAX_CONNECTIONS + 1]; // +1 for the listening socket
   size_t nfds;
   int listen_fd;
 } poll_mgr_t;
