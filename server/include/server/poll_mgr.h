@@ -12,10 +12,11 @@ typedef struct {
 } poll_mgr_t;
 
 typedef struct {
-  void (*on_disconnection)(poll_mgr_t *mgr, int client_fd);
-  void (*on_connection)(poll_mgr_t *mgr, int client_fd);
-  void (*on_message)(poll_mgr_t *mgr, int sender_fd, const char *buf,
+  void (*on_disconnection)(void *ctx, poll_mgr_t *mgr, int client_fd);
+  void (*on_connection)(void *ctx, poll_mgr_t *mgr, int client_fd);
+  void (*on_message)(void *ctx, poll_mgr_t *mgr, int sender_fd, const char *buf,
                      size_t len);
+  void *ctx;
 } poll_callback_t;
 
 void poll_mgr_init(poll_mgr_t *mgr, int listen_fd);

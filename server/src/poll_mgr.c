@@ -53,7 +53,7 @@ static void log_new_connection(struct sockaddr_storage *addr_storage,
 }
 
 static void handle_new_connection(poll_mgr_t *mgr,
-                                  void (*on_connection)(poll_mgr_t *, int)) {
+                                  const poll_callback_t *callbacks) {
   struct sockaddr_storage addr_storage;
   socklen_t addr_len = sizeof(addr_storage);
 
@@ -71,8 +71,8 @@ static void handle_new_connection(poll_mgr_t *mgr,
     mgr->nfds++;
 
     log_new_connection(&addr_storage, addr_len, client_fd);
-    if (on_connection) {
-      on_connection(mgr, client_fd);
+    if (callbacks->on_connection) {
+      callbacks->on_connection(callbacks->ctx, mgr, client_fd);
     }
   } else {
     (void)fprintf(
@@ -83,7 +83,7 @@ static void handle_new_connection(poll_mgr_t *mgr,
 }
 
 static void remove_client(poll_mgr_t *mgr, size_t index,
-                          void (*on_disconnection)(poll_mgr_t *, int)) {
+                          const poll_callback_t *callbacks) {
   int client_fd = mgr->fds[index].fd;
   close(client_fd);
 
@@ -92,8 +92,8 @@ static void remove_client(poll_mgr_t *mgr, size_t index,
     mgr->fds[index] = mgr->fds[mgr->nfds];
   }
 
-  if (on_disconnection) {
-    on_disconnection(mgr, client_fd);
+  if (callbacks->on_disconnection) {
+    callbacks->on_disconnection(callbacks->ctx, mgr, client_fd);
   }
 }
 
@@ -115,7 +115,7 @@ void poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
       }
 
       if (mgr->fds[i].fd == mgr->listen_fd) {
-        handle_new_connection(mgr, callbacks.on_connection);
+        handle_new_connection(mgr, &callbacks);
         i++;
         continue;
       }
@@ -125,13 +125,14 @@ void poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
 
       if (nbytes <= 0) {
         // The last entry was swapped into slot i; revisit it without advancing.
-        remove_client(mgr, i, callbacks.on_disconnection);
+        remove_client(mgr, i, &callbacks);
         continue;
       }
 
       buf[nbytes] = '\0';
       if (callbacks.on_message) {
-        callbacks.on_message(mgr, client_fd, buf, (size_t)nbytes);
+        callbacks.on_message(callbacks.ctx, mgr, client_fd, buf,
+                             (size_t)nbytes);
       }
       i++;
     }

@@ -35,13 +35,15 @@ static void broadcast_message(poll_mgr_t *mgr, int sender_fd, const char *buf,
   }
 }
 
-static void handle_message(poll_mgr_t *mgr, int sender_fd, const char *buf,
-                           size_t len) {
+static void handle_message(void *ctx, poll_mgr_t *mgr, int sender_fd,
+                           const char *buf, size_t len) {
+  (void)ctx;
   printf("[Client %d]: %.*s", sender_fd, (int)len, buf);
   broadcast_message(mgr, sender_fd, buf, len);
 }
 
-static void on_disconnect(poll_mgr_t *mgr, int client_fd) {
+static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
+  (void)ctx;
   printf("[SERVER]: Client with socket descriptor %d left.\n", client_fd);
   char msg[BROADCAST_MESSAGE_LENGTH];
   int l_msg = snprintf(msg, sizeof(msg), "User left the chat...\n");
@@ -50,7 +52,8 @@ static void on_disconnect(poll_mgr_t *mgr, int client_fd) {
   }
 }
 
-static void on_connect(poll_mgr_t *mgr, int client_fd) {
+static void on_connect(void *ctx, poll_mgr_t *mgr, int client_fd) {
+  (void)ctx;
   printf("[SERVER]: Client with socket descriptor %d entered.\n", client_fd);
   char msg[BROADCAST_MESSAGE_LENGTH];
   int l_msg = snprintf(msg, sizeof(msg), "User joined the chat...\n");
@@ -81,6 +84,7 @@ int main(int argc, char *argv[]) {
       .on_connection = on_connect,
       .on_disconnection = on_disconnect,
       .on_message = handle_message,
+      .ctx = NULL,
   };
 
   poll_mgr_run(&mgr, callbacks);
