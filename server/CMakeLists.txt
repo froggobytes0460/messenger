@@ -1,4 +1,5 @@
-add_library(server_core STATIC src/cli_args.c src/main_socket.c src/poll_mgr.c)
+add_library(server_core STATIC src/chat.c src/cli_args.c src/main_socket.c
+                            src/poll_mgr.c)
 target_include_directories(server_core PUBLIC include/)
 target_link_libraries(server_core PRIVATE compiler_flags)
 
