@@ -4,7 +4,6 @@
 #include <server/poll_mgr.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
@@ -27,14 +26,6 @@ static void send_all(int fd, const char *buf, size_t len) {
     }
     sent += (size_t)n;
   }
-}
-
-void poll_mgr_init(poll_mgr_t *mgr, int listen_fd) {
-  memset(mgr, 0, sizeof(*mgr));
-  mgr->listen_fd = listen_fd;
-  mgr->fds[0].fd = listen_fd; // First socket fd should be the listening one.
-  mgr->fds[0].events = POLLIN;
-  mgr->nfds = 1;
 }
 
 static void log_new_connection(struct sockaddr_storage *addr_storage,
@@ -112,14 +103,21 @@ static void remove_client(poll_mgr_t *mgr, size_t index,
   }
 }
 
-void poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
+void poll_mgr_init(poll_mgr_t *mgr, int listen_fd) {
+  memset(mgr, 0, sizeof(*mgr));
+  mgr->listen_fd = listen_fd;
+  mgr->fds[0].fd = listen_fd; // First socket fd should be the listening one.
+  mgr->fds[0].events = POLLIN;
+  mgr->nfds = 1;
+}
+
+int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
   char buf[BUFFER_SIZE];
 
   while (1) {
-    int poll_count = poll(mgr->fds, mgr->nfds, -1);
-    if (poll_count == -1) {
+    if (poll(mgr->fds, mgr->nfds, -1) == -1) {
       perror("poll");
-      exit(EX_OSERR);
+      return EX_OSERR;
     }
 
     size_t i = 0;

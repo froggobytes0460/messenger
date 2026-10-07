@@ -18,9 +18,9 @@ static int parse_long(const char *str, long min, long max, long *out) {
   return 0;
 }
 
-void parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
+int parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
   if (!args_out) {
-    return;
+    return EXIT_FAILURE;
   }
 
   // Sensible default values
@@ -39,7 +39,7 @@ void parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
       if (parse_long(optarg, 1, USHRT_MAX, &value) != 0) {
         (void)fprintf(stderr, "Error: invalid port '%s' (expected 1-%d)\n",
                       optarg, USHRT_MAX);
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
       }
       args_out->portNumber = (unsigned short)value;
       break;
@@ -47,14 +47,15 @@ void parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
       if (parse_long(optarg, 0, INT_MAX, &value) != 0) {
         (void)fprintf(stderr, "Error: invalid backlog '%s' (expected 0-%d)\n",
                       optarg, INT_MAX);
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
       }
       args_out->backlog = (unsigned int)value;
       break;
     default:
       (void)fprintf(stderr, "Usage: %s [-p port] [-b backlog]\n", argv[0]);
-      exit(EXIT_FAILURE);
+      return EXIT_FAILURE;
     }
   }
   // NOLINTEND(misc-include-cleaner)
+  return 0;
 }

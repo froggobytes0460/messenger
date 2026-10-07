@@ -11,13 +11,20 @@
 
 int main(int argc, char *argv[]) {
   struct ParsedArgs cli_args = {0};
-  parse_args(&cli_args, argc, argv);
+  int rc = parse_args(&cli_args, argc, argv);
+  if (rc != 0) {
+    return rc;
+  }
 
   printf("Server Initializing...\n");
   printf("Listening on port: %hu\nLength of backlog: %u\n", cli_args.portNumber,
          cli_args.backlog);
 
-  int listen_fd = get_main_socket(cli_args.portNumber);
+  int listen_fd = -1;
+  rc = get_main_socket(cli_args.portNumber, &listen_fd);
+  if (rc != 0) {
+    return rc;
+  }
 
   if (listen(listen_fd, (int)cli_args.backlog) != 0) {
     (void)fprintf(stderr, "Error: %s\n", strerror(errno));
@@ -30,8 +37,8 @@ int main(int argc, char *argv[]) {
   chat_t chat;
   chat_init(&chat);
 
-  poll_mgr_run(&mgr, chat_callbacks(&chat));
+  rc = poll_mgr_run(&mgr, chat_callbacks(&chat));
 
   close(listen_fd);
-  return 0;
+  return rc;
 }

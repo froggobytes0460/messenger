@@ -6,9 +6,9 @@
 #include <sys/poll.h>
 
 typedef struct {
-  struct pollfd fds[MAX_CONNECTIONS + 1]; // +1 for the listening socket
-  size_t nfds;
   int listen_fd;
+  size_t nfds;
+  struct pollfd fds[MAX_CONNECTIONS + 1]; // +1 for the listening socket
 } poll_mgr_t;
 
 typedef struct {
@@ -20,7 +20,8 @@ typedef struct {
 } poll_callback_t;
 
 void poll_mgr_init(poll_mgr_t *mgr, int listen_fd);
-void poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks);
+// Runs the event loop. Only returns, with a non-zero exit code, on failure.
+int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks);
 
 void poll_mgr_broadcast(poll_mgr_t *mgr, int except_fd, const char *buf,
                         size_t buf_len);

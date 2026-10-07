@@ -2,13 +2,12 @@
 #include <server/constants.h>
 #include <server/main_socket.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sysexits.h>
 #include <unistd.h>
 
-int get_main_socket(unsigned short port) {
+int get_main_socket(unsigned short port, int *fd_out) {
   struct addrinfo hints;
   struct addrinfo *res;
 
@@ -23,7 +22,7 @@ int get_main_socket(unsigned short port) {
   int rc = getaddrinfo(NULL, port_str, &hints, &res);
   if (rc != 0) {
     (void)fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rc));
-    exit(EX_NOHOST);
+    return EX_NOHOST;
   }
 
   struct addrinfo *p;
@@ -36,11 +35,12 @@ int get_main_socket(unsigned short port) {
     }
 
     // Allow reconnection shortly after disconnection.
+    // NOLINTNEXTLINE(misc-include-cleaner)
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int))) {
       perror("setsockopt");
       close(sockfd);
       freeaddrinfo(res);
-      exit(EX_OSERR);
+      return EX_OSERR;
     }
 
     if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
@@ -54,9 +54,11 @@ int get_main_socket(unsigned short port) {
   if (p == NULL) {
     (void)fprintf(stderr, "Server Error: Failed to bind any address.\n");
     freeaddrinfo(res);
-    exit(EX_UNAVAILABLE);
+    return EX_UNAVAILABLE;
   }
 
   freeaddrinfo(res);
-  return sockfd;
+  *fd_out = sockfd;
+
+  return 0;
 }
