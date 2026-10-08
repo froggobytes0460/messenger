@@ -54,7 +54,7 @@ static void log_new_connection(struct sockaddr_storage *addr_storage,
   }
 
   printf(
-      "[Server]: Client of %s with IP address %s:%s connected to socket %d\n",
+      "[SERVER]: Client of %s with IP address %s:%s connected to socket %d\n",
       ip_type, hoststr, portstr, client_fd);
 }
 

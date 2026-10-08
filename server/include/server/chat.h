@@ -6,29 +6,49 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// Per-connection chat state. A zeroed slot is an unused one.
-typedef struct {
-  bool active;
-  int fd;
-  bool named;
-  char name[MAX_NAME_LEN + 1];
+/**
+ * @file chat.h
+ * @brief Chat room logic layered on top of the poll manager.
+ */
 
-  // Bytes received so far for the current, not yet newline-terminated line.
-  char inbuf[BUFFER_SIZE];
-  size_t inlen;
+/**
+ * @brief State containing client data.
+ *
+ * One slot per connection; a slot is reusable once @c active is false.
+ */
+typedef struct {
+  bool active; ///< Flag that determines if client is active.
+  int fd;      ///< The socket file descriptor of the client.
+  bool named;  ///< Flag that informs if client is named or still unnamed.
+  char name[MAX_NAME_LEN + 1]; ///< The name string.
+  char inbuf[BUFFER_SIZE];     ///< Bytes received so far, not yet
+                               ///< newline-terminated line.
+  size_t inlen; ///< Number of valid bytes currently held in @c inbuf.
 } chat_client_t;
 
+/**
+ * @brief Chat room state: all client slots.
+ */
 typedef struct {
-  chat_client_t clients[MAX_CONNECTIONS];
+  chat_client_t clients[MAX_CONNECTIONS]; ///< Fixed pool of client slots.
 } chat_t;
 
+/**
+ * @brief Initializes a chat room, marking every client slot as unused.
+ * @param[out] chat Chat state to initialize.
+ */
 void chat_init(chat_t *chat);
 
-// Callbacks that implement the chat room on top of the poll manager. `chat`
-// is passed back to the handlers as ctx and must outlive the run loop.
-//
-// Protocol: the first line a client sends is its username; every following
-// line is a chat message broadcast to everyone else.
+/**
+ * @brief Builds the poll manager callbacks that implement the chat room.
+ *
+ * Protocol: the first line a client sends is its username; every following
+ * line is a chat message broadcast to everyone else.
+ *
+ * @param[in] chat Chat state, passed back to the handlers as @c ctx. Must be
+ *             initialized with chat_init() and outlive the run loop.
+ * @return Callbacks to pass to poll_mgr_run().
+ */
 poll_callback_t chat_callbacks(chat_t *chat);
 
 #endif // !CHAT_H
