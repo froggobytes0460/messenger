@@ -1,10 +1,8 @@
-#include <errno.h>
 #include <server/chat.h>
 #include <server/cli_args.h>
 #include <server/main_socket.h>
 #include <server/poll_mgr.h>
 #include <stdio.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <sysexits.h>
 #include <unistd.h>
@@ -27,7 +25,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (listen(listen_fd, (int)cli_args.backlog) != 0) {
-    (void)fprintf(stderr, "Error: %s\n", strerror(errno));
+    perror("listen");
     return EX_OSERR;
   }
 
