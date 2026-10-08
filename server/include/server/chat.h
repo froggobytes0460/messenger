@@ -12,14 +12,24 @@
  */
 
 /**
+ * @brief The state of a client connected to server.
+ */
+typedef enum {
+  CLIENT_CONNECTED,      ///< The client has just connected
+  CLIENT_AUTHENTICATING, ///< The client is authenticating.
+  // The client is authenticated, and can send/receive msgs.
+  CLIENT_AUTHENTICATED,
+} StateEnum;
+
+/**
  * @brief State containing client data.
  *
  * One slot per connection; a slot is reusable once @c active is false.
  */
 typedef struct {
-  bool active; ///< Flag that determines if client is active.
-  int fd;      ///< The socket file descriptor of the client.
-  bool named;  ///< Flag that informs if client is named or still unnamed.
+  bool active;                 ///< Flag that determines if client is active.
+  int fd;                      ///< The socket file descriptor of the client.
+  StateEnum state;             ///< The state of the client.
   char name[MAX_NAME_LEN + 1]; ///< The name string.
   char inbuf[BUFFER_SIZE];     ///< Bytes received so far, not yet
                                ///< newline-terminated line.

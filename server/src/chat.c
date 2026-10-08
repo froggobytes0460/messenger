@@ -43,13 +43,13 @@ static void handle_line(chat_client_t *client, poll_mgr_t *mgr) {
     return;
   }
 
-  if (!client->named) {
+  if (client->state != CLIENT_AUTHENTICATED) {
     // Usernames longer than MAX_NAME_LEN are truncated.
     size_t name_len =
         client->inlen < MAX_NAME_LEN ? client->inlen : MAX_NAME_LEN;
     memcpy(client->name, client->inbuf, name_len);
     client->name[name_len] = '\0';
-    client->named = true;
+    client->state = CLIENT_CONNECTED;
     printf("[SERVER]: Client %d is now known as %s.\n", client->fd,
            client->name);
     announce(mgr, client->fd, client->name, "joined the chat...");
@@ -89,7 +89,7 @@ static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
     return;
   }
 
-  if (client->named) {
+  if (client->state == CLIENT_AUTHENTICATED) {
     announce(mgr, client_fd, client->name, "left the chat...");
   }
   memset(client, 0, sizeof(*client));
