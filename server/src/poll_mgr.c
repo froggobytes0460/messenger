@@ -115,9 +115,17 @@ int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
   char buf[BUFFER_SIZE];
 
   while (1) {
-    if (poll(mgr->fds, mgr->nfds, -1) == -1) {
+    int rc = poll(mgr->fds, mgr->nfds, POLL_TICK_MS);
+    if (rc == -1) {
+      if (errno == EINTR) {
+        continue;
+      }
       log_perror("poll");
       return EX_OSERR;
+    }
+
+    if (rc == 0) {
+      goto on_tick;
     }
 
     size_t i = 0;
@@ -148,6 +156,10 @@ int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
                              (size_t)nbytes);
       }
       i++;
+    }
+  on_tick:
+    if (callbacks.on_tick) {
+      callbacks.on_tick(callbacks.ctx, mgr);
     }
   }
 }

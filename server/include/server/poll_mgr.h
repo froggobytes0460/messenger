@@ -34,6 +34,8 @@ typedef struct {
   /// Called with @p len bytes in @p buf (not NUL-terminated) from @p sender_fd.
   void (*on_message)(void *ctx, poll_mgr_t *mgr, int sender_fd, const char *buf,
                      size_t len);
+  /// Called after every `poll()` return, including timeouts with no events.
+  void (*on_tick)(void *ctx, poll_mgr_t *mgr);
   void *ctx; ///< User data passed as the first argument to every handler.
 } poll_callback_t;
 

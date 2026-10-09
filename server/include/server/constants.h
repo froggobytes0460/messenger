@@ -18,5 +18,11 @@
 #define MAX_CONNECTIONS 100  ///< Maximum number of simultaneous clients.
 #define LOG_TIMESTAMP_LEN 32 ///< Size of the log timestamp buffer, in bytes.
 #define LOG_MSG_MAX_LEN 512  ///< Maximum length of one formatted log message.
+#define POLL_TICK_MS                                                           \
+  1000 ///< The time in milliseconds for waiting with each poll iteration.
+#define UNAUTH_TIMEOUT_MS                                                      \
+  120000 ///< The timeout in ms for unauthenticated clients before rejection.
+#define MAX_OUTBUF                                                             \
+  16384 ///< Maximum unsent bytes queued for each client before dropping.
 
 #endif // !CONSTANTS_H
