@@ -32,17 +32,23 @@ int main(int argc, char *argv[]) {
 
   if (listen(listen_fd, (int)cli_args.backlog) != 0) {
     log_perror("listen");
-    return EX_OSERR;
+    rc = EX_OSERR;
+    goto cleanup_and_exit;
   }
 
   poll_mgr_t mgr;
-  poll_mgr_init(&mgr, listen_fd);
+  rc = poll_mgr_init(&mgr, listen_fd);
+  if (rc != 0) {
+    rc = EX_OSERR;
+    goto cleanup_and_exit;
+  }
 
   chat_t chat;
   chat_init(&chat);
 
   rc = poll_mgr_run(&mgr, chat_callbacks(&chat));
 
+cleanup_and_exit:
   close(listen_fd);
   log_close();
   return rc;

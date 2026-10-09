@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <server/constants.h>
 #include <server/log.h>
@@ -16,6 +17,20 @@
 
 #define HOST_STR_LEN 1025
 #define SERV_STR_LEN 32
+
+static int set_fd_nonblocking(int fd) {
+  int fd_flags = fcntl(fd, F_GETFL, 0);
+  if (fd_flags == -1) {
+    log_perror("fcntl F_GETFL");
+    return -1;
+  }
+  fd_flags |= O_NONBLOCK;
+  if (fcntl(fd, F_SETFL, fd_flags) == -1) {
+    log_perror("fcntl F_SETFL");
+    return -1;
+  }
+  return 0;
+}
 
 static void send_all(int fd, const char *buf, size_t len) {
   size_t sent = 0;
@@ -73,6 +88,11 @@ static void handle_new_connection(poll_mgr_t *mgr,
     return;
   }
 
+  if (set_fd_nonblocking(client_fd) == -1) {
+    close(client_fd);
+    return;
+  }
+
   if (mgr->nfds < MAX_CONNECTIONS + 1) {
     mgr->fds[mgr->nfds].fd = client_fd;
     mgr->fds[mgr->nfds].events = POLLIN;
@@ -103,12 +123,17 @@ static void remove_client(poll_mgr_t *mgr, size_t index,
   }
 }
 
-void poll_mgr_init(poll_mgr_t *mgr, int listen_fd) {
+int poll_mgr_init(poll_mgr_t *mgr, int listen_fd) {
   memset(mgr, 0, sizeof(*mgr));
+  int rc = set_fd_nonblocking(listen_fd);
+  if (rc != 0) {
+    return rc;
+  }
   mgr->listen_fd = listen_fd;
   mgr->fds[0].fd = listen_fd; // First socket fd should be the listening one.
   mgr->fds[0].events = POLLIN;
   mgr->nfds = 1;
+  return 0;
 }
 
 int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {

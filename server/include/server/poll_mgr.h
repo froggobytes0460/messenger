@@ -43,8 +43,9 @@ typedef struct {
  * @brief Initializes a poll manager.
  * @param[out] mgr Poll manager to initialize.
  * @param[in] listen_fd The socket descriptor of the listening socket.
+ * @return 0 if successful, otherwise log error and return -1.
  */
-void poll_mgr_init(poll_mgr_t *mgr, int listen_fd);
+int poll_mgr_init(poll_mgr_t *mgr, int listen_fd);
 
 /**
  * @brief Runs the event loop.
