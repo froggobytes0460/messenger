@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <server/constants.h>
+#include <server/log.h>
 #include <server/poll_mgr.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -10,6 +11,8 @@
 #include <sys/types.h>
 #include <sysexits.h>
 #include <unistd.h>
+
+#define LOG_TAG "poll_mgr"
 
 #define HOST_STR_LEN 1025
 #define SERV_STR_LEN 32
@@ -50,12 +53,11 @@ static void log_new_connection(struct sockaddr_storage *addr_storage,
                        sizeof(hoststr), portstr, sizeof(portstr),
                        NI_NUMERICHOST | NI_NUMERICSERV);
   if (rc != 0) {
-    (void)fprintf(stderr, "getnameinfo failed: %s\n", gai_strerror(rc));
+    log_error("getnameinfo failed: %s", gai_strerror(rc));
   }
 
-  printf(
-      "[SERVER]: Client of %s with IP address %s:%s connected to socket %d\n",
-      ip_type, hoststr, portstr, client_fd);
+  log_info("%s client %s:%s connected on socket %d", ip_type, hoststr, portstr,
+           client_fd);
 }
 
 static void handle_new_connection(poll_mgr_t *mgr,
@@ -67,7 +69,7 @@ static void handle_new_connection(poll_mgr_t *mgr,
       accept(mgr->listen_fd, (struct sockaddr *)&addr_storage, &addr_len);
 
   if (client_fd == -1) {
-    perror("accept");
+    log_perror("accept");
     return;
   }
 
@@ -81,9 +83,7 @@ static void handle_new_connection(poll_mgr_t *mgr,
       callbacks->on_connection(callbacks->ctx, mgr, client_fd);
     }
   } else {
-    (void)fprintf(
-        stderr,
-        "Server Error: Maximum Connections Reached, Rejecting Client.\n");
+    log_warn("maximum connections reached, rejecting client");
     close(client_fd);
   }
 }
@@ -116,7 +116,7 @@ int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
 
   while (1) {
     if (poll(mgr->fds, mgr->nfds, -1) == -1) {
-      perror("poll");
+      log_perror("poll");
       return EX_OSERR;
     }
 

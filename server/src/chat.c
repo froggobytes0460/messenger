@@ -1,10 +1,13 @@
 #include <server/chat.h>
 #include <server/constants.h>
+#include <server/log.h>
 #include <server/poll_mgr.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+
+#define LOG_TAG "chat"
 
 static chat_client_t *find_client(chat_t *chat, int fd) {
   for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
@@ -50,8 +53,7 @@ static void handle_line(chat_client_t *client, poll_mgr_t *mgr) {
     memcpy(client->name, client->inbuf, name_len);
     client->name[name_len] = '\0';
     client->state = CLIENT_CONNECTED;
-    printf("[SERVER]: Client %d is now known as %s.\n", client->fd,
-           client->name);
+    log_info("client %d is now known as %s", client->fd, client->name);
     announce(mgr, client->fd, client->name, "joined the chat...");
     return;
   }
@@ -59,7 +61,7 @@ static void handle_line(chat_client_t *client, poll_mgr_t *mgr) {
   char msg[MAX_NAME_LEN + 2 + BUFFER_SIZE + 2];
   int len = snprintf(msg, sizeof(msg), "%s: %s\n", client->name, client->inbuf);
   if (len > 0) {
-    printf("[%s]: %s\n", client->name, client->inbuf);
+    log_debug("%s: %s", client->name, client->inbuf);
     poll_mgr_broadcast(mgr, client->fd, msg, (size_t)len);
   }
 }
@@ -83,7 +85,7 @@ static void on_message(void *ctx, poll_mgr_t *mgr, int sender_fd,
 }
 
 static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
-  printf("[SERVER]: Client with socket descriptor %d left.\n", client_fd);
+  log_info("client %d left", client_fd);
   chat_client_t *client = find_client(ctx, client_fd);
   if (client == NULL) {
     return;
@@ -97,7 +99,7 @@ static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
 
 static void on_connect(void *ctx, poll_mgr_t *mgr, int client_fd) {
   (void)mgr;
-  printf("[SERVER]: Client with socket descriptor %d entered.\n", client_fd);
+  log_info("client %d entered", client_fd);
   chat_client_t *client = alloc_client(ctx);
   if (client == NULL) {
     return;

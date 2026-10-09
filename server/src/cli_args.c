@@ -26,9 +26,11 @@ int parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
   // Sensible default values
   args_out->portNumber = PORT_NUMBER_DEFAULT;
   args_out->backlog = BACKLOG_DEFAULT;
+  args_out->logFile = NULL;
 
-  // "p:" means -p expects an argument. "b:" means -b expects an argument.
-  const char *optstring = "p:b:";
+  // "p:" means -p expects an argument. "b:" means -b expects an argument. "l:"
+  // means -b expects an argument.
+  const char *optstring = "p:b:l:";
   int opt;
   long value;
 
@@ -51,8 +53,12 @@ int parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
       }
       args_out->backlog = (unsigned int)value;
       break;
+    case 'l':
+      args_out->logFile = optarg;
+      break;
     default:
-      (void)fprintf(stderr, "Usage: %s [-p port] [-b backlog]\n", argv[0]);
+      (void)fprintf(stderr, "Usage: %s [-p port] [-b backlog] [-l logfile]\n",
+                    argv[0]);
       return EXIT_FAILURE;
     }
   }

@@ -1,11 +1,14 @@
 #include <netdb.h>
 #include <server/constants.h>
+#include <server/log.h>
 #include <server/main_socket.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sysexits.h>
 #include <unistd.h>
+
+#define LOG_TAG "main_socket"
 
 int get_main_socket(unsigned short port, int *fd_out) {
   struct addrinfo hints;
@@ -21,7 +24,7 @@ int get_main_socket(unsigned short port, int *fd_out) {
 
   int rc = getaddrinfo(NULL, port_str, &hints, &res);
   if (rc != 0) {
-    (void)fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rc));
+    log_error("getaddrinfo: %s", gai_strerror(rc));
     return EX_NOHOST;
   }
 
@@ -37,7 +40,7 @@ int get_main_socket(unsigned short port, int *fd_out) {
     // Allow reconnection shortly after disconnection.
     // NOLINTNEXTLINE(misc-include-cleaner)
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int))) {
-      perror("setsockopt");
+      log_perror("setsockopt");
       close(sockfd);
       freeaddrinfo(res);
       return EX_OSERR;
@@ -52,7 +55,7 @@ int get_main_socket(unsigned short port, int *fd_out) {
   }
 
   if (p == NULL) {
-    (void)fprintf(stderr, "Server Error: Failed to bind any address.\n");
+    log_error("failed to bind any address");
     freeaddrinfo(res);
     return EX_UNAVAILABLE;
   }

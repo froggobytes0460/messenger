@@ -13,6 +13,9 @@ struct ParsedArgs {
   unsigned short portNumber; ///< The port number to listen on.
   /// The number of connections that are allowed to be on queue/backlog.
   unsigned backlog;
+  /// File to append log lines to (in addition to stderr), or NULL for none.
+  /// Points into @c argv , so it lives as long as the program.
+  const char *logFile;
 };
 
 /**

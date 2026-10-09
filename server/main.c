@@ -1,11 +1,13 @@
 #include <server/chat.h>
 #include <server/cli_args.h>
+#include <server/log.h>
 #include <server/main_socket.h>
 #include <server/poll_mgr.h>
-#include <stdio.h>
 #include <sys/socket.h>
 #include <sysexits.h>
 #include <unistd.h>
+
+#define LOG_TAG "main"
 
 int main(int argc, char *argv[]) {
   struct ParsedArgs cli_args = {0};
@@ -14,9 +16,13 @@ int main(int argc, char *argv[]) {
     return rc;
   }
 
-  printf("Server Initializing...\n");
-  printf("Listening on port: %hu\nLength of backlog: %u\n", cli_args.portNumber,
-         cli_args.backlog);
+  if (cli_args.logFile != NULL && log_open_file(cli_args.logFile) != 0) {
+    log_perror(cli_args.logFile);
+    return EX_CANTCREAT;
+  }
+
+  log_info("initializing, port %hu, backlog %u", cli_args.portNumber,
+           cli_args.backlog);
 
   int listen_fd = -1;
   rc = get_main_socket(cli_args.portNumber, &listen_fd);
@@ -25,7 +31,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (listen(listen_fd, (int)cli_args.backlog) != 0) {
-    perror("listen");
+    log_perror("listen");
     return EX_OSERR;
   }
 
@@ -38,5 +44,6 @@ int main(int argc, char *argv[]) {
   rc = poll_mgr_run(&mgr, chat_callbacks(&chat));
 
   close(listen_fd);
+  log_close();
   return rc;
 }
