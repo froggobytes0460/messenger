@@ -4,6 +4,7 @@
 #include <server/constants.h>
 #include <server/log.h>
 #include <server/poll_mgr.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -84,6 +85,10 @@ static void handle_new_connection(poll_mgr_t *mgr,
       accept(mgr->listen_fd, (struct sockaddr *)&addr_storage, &addr_len);
 
   if (client_fd == -1) {
+    // NOLINTNEXTLINE(misc-include-cleaner)
+    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ECONNABORTED) {
+      return;
+    }
     log_perror("accept");
     return;
   }
@@ -136,6 +141,54 @@ int poll_mgr_init(poll_mgr_t *mgr, int listen_fd) {
   return 0;
 }
 
+/// Reads from a readable client. Returns true if the client was removed.
+static bool handle_client_readable(poll_mgr_t *mgr, size_t index, char *buf,
+                                   size_t buf_size,
+                                   const poll_callback_t *callbacks) {
+  int client_fd = mgr->fds[index].fd;
+  ssize_t nbytes = recv(client_fd, buf, buf_size - 1, 0);
+
+  if (nbytes == -1) {
+    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+      return false;
+    }
+    log_perror("recv");
+  }
+  if (nbytes <= 0) {
+    remove_client(mgr, index, callbacks);
+    return true;
+  }
+
+  buf[nbytes] = '\0';
+  if (callbacks->on_message) {
+    callbacks->on_message(callbacks->ctx, mgr, client_fd, buf, (size_t)nbytes);
+  }
+  return false;
+}
+
+static void dispatch_events(poll_mgr_t *mgr, char *buf, size_t buf_size,
+                            const poll_callback_t *callbacks) {
+  size_t i = 0;
+  while (i < mgr->nfds) {
+    if (!(mgr->fds[i].revents & (POLLIN | POLLHUP | POLLERR))) {
+      i++;
+      continue;
+    }
+
+    if (mgr->fds[i].fd == mgr->listen_fd) {
+      handle_new_connection(mgr, callbacks);
+      i++;
+      continue;
+    }
+
+    // If the client was removed, the last entry was swapped into slot i;
+    // revisit it without advancing.
+    if (!handle_client_readable(mgr, i, buf, buf_size, callbacks)) {
+      i++;
+    }
+  }
+}
+
 int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
   char buf[BUFFER_SIZE];
 
@@ -149,40 +202,10 @@ int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
       return EX_OSERR;
     }
 
-    if (rc == 0) {
-      goto on_tick;
+    if (rc > 0) {
+      dispatch_events(mgr, buf, sizeof(buf), &callbacks);
     }
 
-    size_t i = 0;
-    while (i < mgr->nfds) {
-      if (!(mgr->fds[i].revents & (POLLIN | POLLHUP | POLLERR))) {
-        i++;
-        continue;
-      }
-
-      if (mgr->fds[i].fd == mgr->listen_fd) {
-        handle_new_connection(mgr, &callbacks);
-        i++;
-        continue;
-      }
-
-      int client_fd = mgr->fds[i].fd;
-      ssize_t nbytes = recv(client_fd, buf, sizeof(buf) - 1, 0);
-
-      if (nbytes <= 0) {
-        // The last entry was swapped into slot i; revisit it without advancing.
-        remove_client(mgr, i, &callbacks);
-        continue;
-      }
-
-      buf[nbytes] = '\0';
-      if (callbacks.on_message) {
-        callbacks.on_message(callbacks.ctx, mgr, client_fd, buf,
-                             (size_t)nbytes);
-      }
-      i++;
-    }
-  on_tick:
     if (callbacks.on_tick) {
       callbacks.on_tick(callbacks.ctx, mgr);
     }
