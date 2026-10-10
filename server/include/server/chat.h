@@ -17,7 +17,7 @@
 typedef enum {
   CLIENT_CONNECTED,      ///< The client has just connected
   CLIENT_AUTHENTICATING, ///< The client is authenticating.
-  // The client is authenticated, and can send/receive msgs.
+  /// The client is authenticated, and can send/receive msgs.
   CLIENT_AUTHENTICATED,
 } StateEnum;
 

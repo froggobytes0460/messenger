@@ -21,6 +21,11 @@ int main(int argc, char *argv[]) {
     return EX_CANTCREAT;
   }
 
+  if (cli_args.verbose) {
+    log_set_level(LOG_LEVEL_DEBUG);
+    log_info("Verbosity set to true.");
+  }
+
   log_info("initializing, port %hu, backlog %u", cli_args.portNumber,
            cli_args.backlog);
 
