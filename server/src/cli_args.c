@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <server/cli_args.h>
 #include <server/constants.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -27,10 +28,9 @@ int parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
   args_out->portNumber = PORT_NUMBER_DEFAULT;
   args_out->backlog = BACKLOG_DEFAULT;
   args_out->logFile = NULL;
+  args_out->verbose = DEFAULT_VERBOSITY;
 
-  // "p:" means -p expects an argument. "b:" means -b expects an argument. "l:"
-  // means -b expects an argument.
-  const char *optstring = "p:b:l:";
+  const char *optstring = "p:b:l:v";
   int opt;
   long value;
 
@@ -55,6 +55,9 @@ int parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
       break;
     case 'l':
       args_out->logFile = optarg;
+      break;
+    case 'v':
+      args_out->verbose = true;
       break;
     default:
       (void)fprintf(stderr, "Usage: %s [-p port] [-b backlog] [-l logfile]\n",

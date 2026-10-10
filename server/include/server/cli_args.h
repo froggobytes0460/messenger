@@ -6,6 +6,8 @@
  * @brief Command line argument parsing.
  */
 
+#include <stdbool.h>
+
 /**
  * @brief The CLI arguments that are parsed.
  */
@@ -16,6 +18,8 @@ struct ParsedArgs {
   /// File to append log lines to (in addition to stderr), or NULL for none.
   /// Points into @c argv , so it lives as long as the program.
   const char *logFile;
+  /// Verbosity of program; if true, then debug statements are logged.
+  bool verbose;
 };
 
 /**

@@ -6,6 +6,8 @@
  * @brief Compile-time limits and defaults shared across the server.
  */
 
+#include <stdbool.h>
+
 #define MAX_PORT_STR_LEN 7 ///< Size of the buffer holding a port as a string.
 #define DECIMAL_INTEGER_BASE                                                   \
   10 ///< Base passed to strtol() when parsing numbers.
@@ -24,5 +26,6 @@
   120000 ///< The timeout in ms for unauthenticated clients before rejection.
 #define MAX_OUTBUF                                                             \
   16384 ///< Maximum unsent bytes queued for each client before dropping.
+#define DEFAULT_VERBOSITY false ///< Default verbosity for program.
 
 #endif // !CONSTANTS_H
