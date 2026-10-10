@@ -101,6 +101,7 @@ static void handle_new_connection(poll_mgr_t *mgr,
   if (mgr->nfds < MAX_CONNECTIONS + 1) {
     mgr->fds[mgr->nfds].fd = client_fd;
     mgr->fds[mgr->nfds].events = POLLIN;
+    mgr->out[mgr->nfds].len = 0;
     mgr->nfds++;
 
     log_new_connection(&addr_storage, addr_len, client_fd);
@@ -121,6 +122,9 @@ static void remove_client(poll_mgr_t *mgr, size_t index,
   mgr->nfds--;
   if (index < mgr->nfds) {
     mgr->fds[index] = mgr->fds[mgr->nfds];
+    memcpy(mgr->out[index].data, mgr->out[mgr->nfds].data,
+           mgr->out[mgr->nfds].len);
+    mgr->out[index].len = mgr->out[mgr->nfds].len;
   }
 
   if (callbacks->on_disconnection) {

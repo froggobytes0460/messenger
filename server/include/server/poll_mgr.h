@@ -12,6 +12,14 @@
  */
 
 /**
+ * @brief Message buffer area to store data to ensure non-blocking send.
+ */
+typedef struct {
+  size_t len;            ///< The length of data in current buffer.
+  char data[MAX_OUTBUF]; ///< The buffer storing queued messages.
+} outbuf_t;
+
+/**
  * @brief State containing the listening socket and all client sockets.
  */
 typedef struct {
@@ -19,6 +27,7 @@ typedef struct {
   size_t nfds;   ///< The number of socket descriptors in @c fds .
   /// Polled descriptors (+1 for the listening socket).
   struct pollfd fds[MAX_CONNECTIONS + 1];
+  outbuf_t out[MAX_CONNECTIONS + 1]; ///< Buffer queue for each client.
 } poll_mgr_t;
 
 /**
