@@ -33,7 +33,7 @@ static int set_fd_nonblocking(int fd) {
   return 0;
 }
 
-static void send_all(int fd, const char *buf, size_t len) {
+static ssize_t try_send(int fd, const char *buf, size_t len) {
   size_t sent = 0;
   while (sent < len) {
     ssize_t n = send(fd, buf + sent, len - sent, MSG_NOSIGNAL);
@@ -41,10 +41,37 @@ static void send_all(int fd, const char *buf, size_t len) {
       if (errno == EINTR) { // NOLINT(misc-include-cleaner)
         continue;
       }
-      return;
+      // NOLINTNEXTLINE(misc-include-cleaner)
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+
+        break;
+      }
+      return -1;
+    }
+    if (n == 0) {
+      break;
     }
     sent += (size_t)n;
   }
+  return (ssize_t)sent;
+}
+
+static int queue_bytes(outbuf_t *out, const char *buf, size_t len) {
+  if (len > MAX_OUTBUF - out->len) {
+    return -1;
+  }
+  memcpy(out->data + out->len, buf, len);
+  out->len += len;
+  return 0;
+}
+
+static ssize_t find_index(poll_mgr_t *mgr, int sockfd) {
+  for (size_t i = 1; i < mgr->nfds; i++) {
+    if (mgr->fds[i].fd == sockfd) {
+      return (ssize_t)i;
+    }
+  }
+  return -1;
 }
 
 static void log_new_connection(struct sockaddr_storage *addr_storage,
@@ -119,30 +146,16 @@ static void remove_client(poll_mgr_t *mgr, size_t index,
   int client_fd = mgr->fds[index].fd;
   close(client_fd);
 
-  mgr->nfds--;
-  if (index < mgr->nfds) {
-    mgr->fds[index] = mgr->fds[mgr->nfds];
-    memcpy(mgr->out[index].data, mgr->out[mgr->nfds].data,
-           mgr->out[mgr->nfds].len);
-    mgr->out[index].len = mgr->out[mgr->nfds].len;
+  size_t nfds = --mgr->nfds;
+  if (index < nfds) {
+    mgr->fds[index] = mgr->fds[nfds];
+    memcpy(mgr->out[index].data, mgr->out[nfds].data, mgr->out[nfds].len);
+    mgr->out[index].len = mgr->out[nfds].len;
   }
 
   if (callbacks->on_disconnection) {
     callbacks->on_disconnection(callbacks->ctx, mgr, client_fd);
   }
-}
-
-int poll_mgr_init(poll_mgr_t *mgr, int listen_fd) {
-  memset(mgr, 0, sizeof(*mgr));
-  int rc = set_fd_nonblocking(listen_fd);
-  if (rc != 0) {
-    return rc;
-  }
-  mgr->listen_fd = listen_fd;
-  mgr->fds[0].fd = listen_fd; // First socket fd should be the listening one.
-  mgr->fds[0].events = POLLIN;
-  mgr->nfds = 1;
-  return 0;
 }
 
 /// Reads from a readable client. Returns true if the client was removed.
@@ -170,27 +183,65 @@ static bool handle_client_readable(poll_mgr_t *mgr, size_t index, char *buf,
   return false;
 }
 
+/// Writes to a writable client. Returns true if the client was removed.
+static bool handle_client_writable(poll_mgr_t *mgr, size_t index,
+                                   const poll_callback_t *callbacks) {
+  outbuf_t *out = &mgr->out[index];
+  ssize_t n = try_send(mgr->fds[index].fd, out->data, out->len);
+
+  if (n == -1) {
+    log_perror("send");
+    remove_client(mgr, index, callbacks);
+    return true;
+  }
+  size_t remaining = out->len - (size_t)n;
+  memmove(out->data, out->data + n, remaining);
+  out->len = remaining;
+
+  if (out->len == 0) {
+    mgr->fds[index].events &= (short)~POLLOUT;
+  }
+  return false;
+}
+
 static void dispatch_events(poll_mgr_t *mgr, char *buf, size_t buf_size,
                             const poll_callback_t *callbacks) {
   size_t i = 0;
   while (i < mgr->nfds) {
-    if (!(mgr->fds[i].revents & (POLLIN | POLLHUP | POLLERR))) {
-      i++;
-      continue;
-    }
+    short revents = mgr->fds[i].revents;
 
     if (mgr->fds[i].fd == mgr->listen_fd) {
-      handle_new_connection(mgr, callbacks);
+      if (revents & POLLIN) {
+        handle_new_connection(mgr, callbacks);
+      }
       i++;
       continue;
     }
 
-    // If the client was removed, the last entry was swapped into slot i;
+    // If a handler removed the client, the last entry was swapped into slot i;
     // revisit it without advancing.
-    if (!handle_client_readable(mgr, i, buf, buf_size, callbacks)) {
-      i++;
+    if ((revents & POLLOUT) && handle_client_writable(mgr, i, callbacks)) {
+      continue;
     }
+    if ((revents & (POLLIN | POLLHUP | POLLERR)) &&
+        handle_client_readable(mgr, i, buf, buf_size, callbacks)) {
+      continue;
+    }
+    i++;
   }
+}
+
+int poll_mgr_init(poll_mgr_t *mgr, int listen_fd) {
+  memset(mgr, 0, sizeof(*mgr));
+  int rc = set_fd_nonblocking(listen_fd);
+  if (rc != 0) {
+    return rc;
+  }
+  mgr->listen_fd = listen_fd;
+  mgr->fds[0].fd = listen_fd; // First socket fd should be the listening one.
+  mgr->fds[0].events = POLLIN;
+  mgr->nfds = 1;
+  return 0;
 }
 
 int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
@@ -222,7 +273,32 @@ void poll_mgr_broadcast(poll_mgr_t *mgr, int except_fd, const char *buf,
     int recipient_fd = mgr->fds[i].fd;
 
     if (recipient_fd != except_fd && recipient_fd != mgr->listen_fd) {
-      send_all(recipient_fd, buf, buf_len);
+      poll_mgr_send(mgr, recipient_fd, buf, buf_len);
     }
   }
+}
+
+int poll_mgr_send(poll_mgr_t *mgr, int fd, const char *buf, size_t len) {
+  ssize_t idx = find_index(mgr, fd);
+  if (idx == -1) {
+    return -1;
+  }
+
+  outbuf_t *out = &mgr->out[idx];
+  if (out->len == 0) {
+    ssize_t sent = try_send(fd, buf, len);
+    if (sent == -1) {
+      return -1;
+    }
+    if ((size_t)sent == len) {
+      return 0;
+    }
+    buf += sent;
+    len -= (size_t)sent;
+  }
+  if (queue_bytes(out, buf, len) == -1) {
+    return -1;
+  }
+  mgr->fds[idx].events |= POLLOUT;
+  return 0;
 }

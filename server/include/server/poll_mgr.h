@@ -76,4 +76,14 @@ int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks);
 void poll_mgr_broadcast(poll_mgr_t *mgr, int except_fd, const char *buf,
                         size_t buf_len);
 
+/**
+ * @brief Sends a message to client, adhering to buffer queues.
+ * @param[in] mgr Poll manager holding connected clients.
+ * @param[in] fd The socket file descriptor of the client to send.
+ * @param[in] buf The bytes to send to client. (not NUL-terminated)
+ * @param[in] len The length of the @p buf .
+ * @return 0 on successful execution, -1 on error.
+ */
+int poll_mgr_send(poll_mgr_t *mgr, int fd, const char *buf, size_t len);
+
 #endif // !POLL_MGR_H
