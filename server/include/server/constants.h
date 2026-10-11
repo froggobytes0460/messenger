@@ -27,5 +27,8 @@
 #define MAX_OUTBUF                                                             \
   16384 ///< Maximum unsent bytes queued for each client before dropping.
 #define DEFAULT_VERBOSITY false ///< Default verbosity for program.
+#define MAX_USERNAME 32  ///< Maximum username length allowed for clients.
+#define MAX_PASSWORD 128 ///< Maximum password length allowed for clients.
+#define MAX_TEXT 200     ///< Maximum text in client requests.
 
 #endif // !CONSTANTS_H
