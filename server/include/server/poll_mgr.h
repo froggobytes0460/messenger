@@ -2,6 +2,7 @@
 #define POLL_MGR_H
 
 #include <server/constants.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <sys/poll.h>
 
@@ -28,6 +29,8 @@ typedef struct {
   /// Polled descriptors (+1 for the listening socket).
   struct pollfd fds[MAX_CONNECTIONS + 1];
   outbuf_t out[MAX_CONNECTIONS + 1]; ///< Buffer queue for each client.
+  /// Flag array to indicate if client needs to be closed.
+  bool closing[MAX_CONNECTIONS + 1];
 } poll_mgr_t;
 
 /**
@@ -85,5 +88,12 @@ void poll_mgr_broadcast(poll_mgr_t *mgr, int except_fd, const char *buf,
  * @return 0 on successful execution, -1 on error.
  */
 int poll_mgr_send(poll_mgr_t *mgr, int fd, const char *buf, size_t len);
+
+/**
+ * @brief Idempotent function that flags a client for closing.
+ * @param[in] mgr Poll manager holding connected clients.
+ * @param[in] client_fd The client socket fd to be closed.
+ */
+void poll_mgr_close(poll_mgr_t *mgr, int client_fd);
 
 #endif // !POLL_MGR_H

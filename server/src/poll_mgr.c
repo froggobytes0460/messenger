@@ -129,6 +129,7 @@ static void handle_new_connection(poll_mgr_t *mgr,
     mgr->fds[mgr->nfds].fd = client_fd;
     mgr->fds[mgr->nfds].events = POLLIN;
     mgr->out[mgr->nfds].len = 0;
+    mgr->closing[mgr->nfds] = false;
     mgr->nfds++;
 
     log_new_connection(&addr_storage, addr_len, client_fd);
@@ -149,6 +150,7 @@ static void remove_client(poll_mgr_t *mgr, size_t index,
   size_t nfds = --mgr->nfds;
   if (index < nfds) {
     mgr->fds[index] = mgr->fds[nfds];
+    mgr->closing[index] = mgr->closing[nfds];
     memcpy(mgr->out[index].data, mgr->out[nfds].data, mgr->out[nfds].len);
     mgr->out[index].len = mgr->out[nfds].len;
   }
@@ -194,6 +196,8 @@ static bool handle_client_writable(poll_mgr_t *mgr, size_t index,
     remove_client(mgr, index, callbacks);
     return true;
   }
+
+  // Shift unsent bytes to the front.
   size_t remaining = out->len - (size_t)n;
   memmove(out->data, out->data + n, remaining);
   out->len = remaining;
@@ -217,6 +221,10 @@ static void dispatch_events(poll_mgr_t *mgr, char *buf, size_t buf_size,
       i++;
       continue;
     }
+    if (mgr->closing[i]) {
+      i++;
+      continue;
+    }
 
     // If a handler removed the client, the last entry was swapped into slot i;
     // revisit it without advancing.
@@ -228,6 +236,14 @@ static void dispatch_events(poll_mgr_t *mgr, char *buf, size_t buf_size,
       continue;
     }
     i++;
+  }
+}
+
+static void sweep_closed(poll_mgr_t *mgr, const poll_callback_t *callbacks) {
+  for (size_t i = mgr->nfds - 1; i >= 1; i--) {
+    if (mgr->closing[i]) {
+      remove_client(mgr, i, callbacks);
+    }
   }
 }
 
@@ -264,6 +280,8 @@ int poll_mgr_run(poll_mgr_t *mgr, poll_callback_t callbacks) {
     if (callbacks.on_tick) {
       callbacks.on_tick(callbacks.ctx, mgr);
     }
+
+    sweep_closed(mgr, &callbacks);
   }
 }
 
@@ -301,4 +319,12 @@ int poll_mgr_send(poll_mgr_t *mgr, int fd, const char *buf, size_t len) {
   }
   mgr->fds[idx].events |= POLLOUT;
   return 0;
+}
+
+void poll_mgr_close(poll_mgr_t *mgr, int client_fd) {
+  ssize_t idx = find_index(mgr, client_fd);
+  if (idx == -1) {
+    return;
+  }
+  mgr->closing[idx] = true;
 }
