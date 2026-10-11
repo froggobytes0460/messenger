@@ -8,3 +8,4 @@ function(add_messenger_test name)
 endfunction()
 
 add_messenger_test(test_cli_args)
+add_messenger_test(test_protocol)
