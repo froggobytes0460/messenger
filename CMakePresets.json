@@ -50,6 +50,23 @@
       "description": "Build the release configuration."
     }
   ],
-
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "description": "Run the tests against the debug build.",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "description": "Run the tests against the release build.",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ],
   "$schema": "https://cmake.org/cmake/help/latest/_downloads/3e2d73bff478d88a7de0de736ba5e361/schema.json"
 }
