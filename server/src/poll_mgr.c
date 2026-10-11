@@ -289,7 +289,13 @@ void poll_mgr_broadcast(poll_mgr_t *mgr, int except_fd, const char *buf,
     int recipient_fd = mgr->fds[i].fd;
 
     if (recipient_fd != except_fd && recipient_fd != mgr->listen_fd) {
-      poll_mgr_send(mgr, recipient_fd, buf, buf_len);
+      if (poll_mgr_send(mgr, recipient_fd, buf, buf_len) == -1 &&
+          !mgr->closing[i]) {
+        log_warn("dropping client with fd %d: send failed or output buffer "
+                 "full",
+                 recipient_fd);
+        mgr->closing[i] = true;
+      }
     }
   }
 }
