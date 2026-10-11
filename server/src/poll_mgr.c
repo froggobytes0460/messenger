@@ -160,8 +160,8 @@ static void remove_client(poll_mgr_t *mgr, size_t index,
   }
 }
 
-/// Reads from a readable client. Returns true if the client was removed.
-static bool handle_client_readable(poll_mgr_t *mgr, size_t index, char *buf,
+/// Reads from a readable client. Flags it for closing on EOF or error.
+static void handle_client_readable(poll_mgr_t *mgr, size_t index, char *buf,
                                    size_t buf_size,
                                    const poll_callback_t *callbacks) {
   int client_fd = mgr->fds[index].fd;
@@ -169,31 +169,29 @@ static bool handle_client_readable(poll_mgr_t *mgr, size_t index, char *buf,
 
   if (nbytes == -1) {
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-      return false;
+      return;
     }
     log_perror("recv");
   }
   if (nbytes <= 0) {
-    remove_client(mgr, index, callbacks);
-    return true;
+    mgr->closing[index] = true;
+    return;
   }
 
   buf[nbytes] = '\0';
   if (callbacks->on_message) {
     callbacks->on_message(callbacks->ctx, mgr, client_fd, buf, (size_t)nbytes);
   }
-  return false;
 }
 
-/// Writes to a writable client. Returns true if the client was removed.
-static bool handle_client_writable(poll_mgr_t *mgr, size_t index,
-                                   const poll_callback_t *callbacks) {
+/// Writes to a writable client. Returns true if it was flagged for closing.
+static bool handle_client_writable(poll_mgr_t *mgr, size_t index) {
   outbuf_t *out = &mgr->out[index];
   ssize_t n = try_send(mgr->fds[index].fd, out->data, out->len);
 
   if (n == -1) {
     log_perror("send");
-    remove_client(mgr, index, callbacks);
+    mgr->closing[index] = true;
     return true;
   }
 
@@ -226,14 +224,14 @@ static void dispatch_events(poll_mgr_t *mgr, char *buf, size_t buf_size,
       continue;
     }
 
-    // If a handler removed the client, the last entry was swapped into slot i;
-    // revisit it without advancing.
-    if ((revents & POLLOUT) && handle_client_writable(mgr, i, callbacks)) {
+    // Handlers only flag clients for closing; nothing is swapped until
+    // sweep_closed(), so always advance. Skip reading if the write failed.
+    if ((revents & POLLOUT) && handle_client_writable(mgr, i)) {
+      i++;
       continue;
     }
-    if ((revents & (POLLIN | POLLHUP | POLLERR)) &&
-        handle_client_readable(mgr, i, buf, buf_size, callbacks)) {
-      continue;
+    if (revents & (POLLIN | POLLHUP | POLLERR)) {
+      handle_client_readable(mgr, i, buf, buf_size, callbacks);
     }
     i++;
   }
