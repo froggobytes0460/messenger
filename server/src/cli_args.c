@@ -60,7 +60,8 @@ int parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
       args_out->verbose = true;
       break;
     default:
-      (void)fprintf(stderr, "Usage: %s [-p port] [-b backlog] [-l logfile]\n",
+      (void)fprintf(stderr,
+                    "Usage: %s [-p port] [-b backlog] [-l logfile] [-v]\n",
                     argv[0]);
       return EXIT_FAILURE;
     }
