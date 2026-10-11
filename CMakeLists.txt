@@ -7,6 +7,12 @@ target_compile_options(compiler_flags INTERFACE -Wall -Wextra -Wpedantic)
 add_subdirectory(client/)
 add_subdirectory(server/)
 
+include(CTest)
+if(BUILD_TESTING)
+  find_package(cmocka REQUIRED) # Arch package: cmocka
+  add_subdirectory(tests/)
+endif()
+
 find_package(Doxygen OPTIONAL_COMPONENTS dot)
 if(DOXYGEN_FOUND)
   set(DOXYGEN_PROJECT_NAME "Messenger")
