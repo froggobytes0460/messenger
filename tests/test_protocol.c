@@ -37,7 +37,7 @@ static const bad_case_t bad_cases[] = {
     {"unknown command", "HELLO bob", PROTO_ERR_UNKNOWN},
     {"missing password", "LOGIN bob", PROTO_ERR_MISSING},
     {"empty field", "LOGIN  pw", PROTO_ERR_MISSING},
-    {"stray CR", "QUIT\r", PROTO_ERR_BAD_CHAR},
+    {"stray CR", "QUIT\r", PROTO_ERR_BAD_INPUT},
     {"missing msg text", "MSG alice", PROTO_ERR_MISSING},
     {
         "username over limit",

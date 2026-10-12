@@ -23,11 +23,11 @@ typedef enum {
  * @brief Return codes that can be given by server.
  */
 typedef enum {
-  PROTO_OK,           ///< Successful operation
-  PROTO_ERR_UNKNOWN,  ///< Unkown error
-  PROTO_ERR_MISSING,  ///< Missing requirements error
-  PROTO_ERR_TOO_LONG, ///< Input/Output text too long error
-  PROTO_ERR_BAD_CHAR, ///< Bad input from client error
+  PROTO_OK,            ///< Successful operation
+  PROTO_ERR_UNKNOWN,   ///< Unkown error
+  PROTO_ERR_MISSING,   ///< Missing requirements error
+  PROTO_ERR_TOO_LONG,  ///< Input/Output text too long error
+  PROTO_ERR_BAD_INPUT, ///< Bad input from client error
 } proto_status_t;
 
 /**
@@ -45,6 +45,9 @@ typedef struct {
 
 /**
  * @brief Parses protocol structure from string.
+ *
+ * If the output is not @p PROTO_OK , the @p out is zeroed out, otherwise a
+ * proper structure is put in @p out .
  * @param[in] line The string to parse.
  * @param[in] len The length of @p line .
  * @param[out] out Parses string into this structure.
