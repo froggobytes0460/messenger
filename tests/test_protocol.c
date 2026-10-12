@@ -69,6 +69,41 @@ static const bad_case_t bad_cases[] = {
         "MSG bob! HI!",
         PROTO_ERR_BAD_INPUT,
     },
+    {
+        "username char below digit range",
+        "LOGIN a/b pw", // '/' is just before '0'
+        PROTO_ERR_BAD_INPUT,
+    },
+    {
+        "username char above digit range",
+        "LOGIN a:b pw", // ':' is just after '9'
+        PROTO_ERR_BAD_INPUT,
+    },
+    {
+        "username char below upper range",
+        "LOGIN a@b pw", // '@' is just before 'A'
+        PROTO_ERR_BAD_INPUT,
+    },
+    {
+        "username char above upper range",
+        "LOGIN a[b pw", // '[' is just after 'Z'
+        PROTO_ERR_BAD_INPUT,
+    },
+    {
+        "username char below lower range",
+        "LOGIN a`b pw", // '`' is just before 'a'
+        PROTO_ERR_BAD_INPUT,
+    },
+    {
+        "username char above lower range",
+        "LOGIN a{b pw", // '{' is just after 'z'
+        PROTO_ERR_BAD_INPUT,
+    },
+    {
+        "username with DEL",
+        "REGISTER bo\x7f pw",
+        PROTO_ERR_BAD_INPUT,
+    },
 };
 
 static const expected_case_t expected_cases[] = {
@@ -109,6 +144,33 @@ static const expected_case_t expected_cases[] = {
         },
     },
     {"quit", "QUIT", &(const protocol_cmd_t){.type = CMD_QUIT}},
+    {
+        "username uses every range endpoint",
+        "LOGIN 09AZaz pw",
+        &(const protocol_cmd_t){
+            .type = CMD_LOGIN,
+            .username = "09AZaz",
+            .password = "pw",
+        },
+    },
+    {
+        "username with dash and underscore",
+        "REGISTER a-b_C9 pw",
+        &(const protocol_cmd_t){
+            .type = CMD_REGISTER,
+            .username = "a-b_C9",
+            .password = "pw",
+        },
+    },
+    {
+        "msg recipient with dash and underscore",
+        "MSG a-b_C9 hi",
+        &(const protocol_cmd_t){
+            .type = CMD_MSG,
+            .username = "a-b_C9",
+            .text = "hi",
+        },
+    },
     {
         "username at max length",
         "LOGIN aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pw", // 32 'a'
