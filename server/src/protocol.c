@@ -1,7 +1,9 @@
 #include <server/constants.h>
 #include <server/protocol.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #define MIN_PRINTABLE_CHAR 0x20
@@ -189,33 +191,69 @@ proto_status_t parse_protocol_str(const char *line, size_t len,
   return rc;
 }
 
-// TODO: stubs, implemented in the next commit.
-static proto_status_t stub_fail(char *buf, size_t *len) {
-  if (*len > 0) {
-    buf[0] = '\0';
+typedef struct {
+  proto_status_t status;
+  const char *reason;
+} err_entry_t;
+
+static const err_entry_t err_reasons[] = {
+    {PROTO_ERR_UNKNOWN, "unknown command"},
+    {PROTO_ERR_MISSING, "missing field"},
+    {PROTO_ERR_TOO_LONG, "too long"},
+    {PROTO_ERR_BAD_INPUT, "bad input"},
+};
+
+static bool is_empty(const char *s) { return s == NULL || s[0] == '\0'; }
+
+/// Formats one line into a scratch buffer, then copies it to @p buf if it fits.
+/// @p len is value-result: capacity in, bytes written out (0 on failure).
+__attribute__((format(printf, 3, 4))) static proto_status_t
+emit_line(char *buf, size_t *len, const char *fmt, ...) {
+  char line[MAX_REPLY];
+  va_list ap;
+  va_start(ap, fmt);
+  int n = vsnprintf(line, sizeof(line), fmt, ap);
+  va_end(ap);
+
+  if (n < 0 || (size_t)n >= sizeof(line) || (size_t)n > *len) {
+    *len = 0;
+    return PROTO_ERR_TOO_LONG;
   }
-  *len = 0;
-  return PROTO_ERR_UNKNOWN;
+  memcpy(buf, line, (size_t)n);
+  *len = (size_t)n;
+  return PROTO_OK;
 }
 
 proto_status_t format_ok(char *buf, size_t *len, const char *text) {
-  (void)text;
-  return stub_fail(buf, len);
+  if (is_empty(text)) {
+    return emit_line(buf, len, "OK\n");
+  }
+  return emit_line(buf, len, "OK %s\n", text);
 }
 
 proto_status_t format_err_reason(char *buf, size_t *len, const char *reason) {
-  (void)reason;
-  return stub_fail(buf, len);
+  if (is_empty(reason)) {
+    *len = 0;
+    return PROTO_ERR_MISSING;
+  }
+  return emit_line(buf, len, "ERR %s\n", reason);
 }
 
 proto_status_t format_err(char *buf, size_t *len, proto_status_t why) {
-  (void)why;
-  return stub_fail(buf, len);
+  for (size_t i = 0; i < sizeof(err_reasons) / sizeof(err_entry_t); i++) {
+    if (err_reasons[i].status == why) {
+      return format_err_reason(buf, len, err_reasons[i].reason);
+    }
+  }
+  *len = 0;
+  return PROTO_ERR_BAD_INPUT;
 }
 
 proto_status_t format_from(char *buf, size_t *len, const char *user,
                            const char *text) {
-  (void)user;
-  (void)text;
-  return stub_fail(buf, len);
+  if (is_empty(user) || is_empty(text)) {
+    *len = 0;
+    return PROTO_ERR_MISSING;
+  }
+  return emit_line(buf, len, "FROM %s %s\n", user, text);
 }
