@@ -188,3 +188,34 @@ proto_status_t parse_protocol_str(const char *line, size_t len,
   }
   return rc;
 }
+
+// TODO: stubs, implemented in the next commit.
+static proto_status_t stub_fail(char *buf, size_t *len) {
+  if (*len > 0) {
+    buf[0] = '\0';
+  }
+  *len = 0;
+  return PROTO_ERR_UNKNOWN;
+}
+
+proto_status_t format_ok(char *buf, size_t *len, const char *text) {
+  (void)text;
+  return stub_fail(buf, len);
+}
+
+proto_status_t format_err_reason(char *buf, size_t *len, const char *reason) {
+  (void)reason;
+  return stub_fail(buf, len);
+}
+
+proto_status_t format_err(char *buf, size_t *len, proto_status_t why) {
+  (void)why;
+  return stub_fail(buf, len);
+}
+
+proto_status_t format_from(char *buf, size_t *len, const char *user,
+                           const char *text) {
+  (void)user;
+  (void)text;
+  return stub_fail(buf, len);
+}

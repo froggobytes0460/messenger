@@ -30,5 +30,7 @@
 #define MAX_USERNAME 32  ///< Maximum username length allowed for clients.
 #define MAX_PASSWORD 128 ///< Maximum password length allowed for clients.
 #define MAX_TEXT 200     ///< Maximum text in client requests.
+#define MAX_REPLY                                                              \
+  256 ///< Buffer size that fits any reply line (longest is a FROM line).
 
 #endif // !CONSTANTS_H
