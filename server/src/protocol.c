@@ -37,6 +37,26 @@ static bool validate_line(const char *str, size_t len) {
   return true;
 }
 
+/// Validates if all bytes in username falls under allowed range (A-Z, a-z,
+/// 0-9), with exceptions of '-' and '_'.
+static bool validate_username(const char *username, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    unsigned char c = username[i];
+    if (c == '-' || c == '_') {
+      continue;
+    }
+    // Ranges for valid character
+    bool is_digit = ('0' <= c && c <= '9') != false;
+    bool is_alphaupper = ('A' <= c && c <= 'Z') != false;
+    bool is_alphalower = ('a' <= c && c <= 'z') != false;
+
+    if (!is_digit && !is_alphalower && !is_alphaupper) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /// Returns the next token and leaves the cursor on the separator (or the end).
 static size_t take_token(cursor_t *c, const char *tok[]) {
   *tok = c->cur;
@@ -80,6 +100,9 @@ static proto_status_t parse_credentials(cursor_t *c, protocol_cmd_t *out) {
   if (rc != PROTO_OK) {
     return rc;
   }
+  if (!validate_username(out->username, n)) {
+    return PROTO_ERR_BAD_INPUT;
+  }
 
   if (!skip_sep(c)) {
     return PROTO_ERR_MISSING;
@@ -105,6 +128,9 @@ static proto_status_t parse_msg(cursor_t *c, protocol_cmd_t *out) {
   proto_status_t rc = copy_field(out->username, MAX_USERNAME, tok, n);
   if (rc != PROTO_OK) {
     return rc;
+  }
+  if (!validate_username(out->username, n)) {
+    return PROTO_ERR_BAD_INPUT;
   }
 
   if (!skip_sep(c)) {
