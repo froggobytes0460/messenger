@@ -247,12 +247,140 @@ static void test_field_limit_boundaries(void **state) {
                    PROTO_ERR_TOO_LONG);
 }
 
+// Reply formatting:
+typedef struct {
+  const char *case_name;
+  proto_status_t why;
+  const char *want;
+} err_case_t;
+
+static const err_case_t err_cases[] = {
+    {"unknown", PROTO_ERR_UNKNOWN, "ERR unknown command\n"},
+    {"missing", PROTO_ERR_MISSING, "ERR missing field\n"},
+    {"too long", PROTO_ERR_TOO_LONG, "ERR too long\n"},
+    {"bad input", PROTO_ERR_BAD_INPUT, "ERR bad input\n"},
+};
+
+// Asserts the bytes written (not NUL terminated) and the value-result length.
+static void assert_reply(const char *buf, size_t len, const char *want) {
+  assert_int_equal(len, strlen(want));
+  assert_memory_equal(buf, want, len);
+}
+
+static void test_format_ok(void **state) {
+  (void)state;
+  char buf[MAX_REPLY];
+  size_t len = sizeof(buf);
+  assert_int_equal(format_ok(buf, &len, NULL), PROTO_OK);
+  assert_reply(buf, len, "OK\n");
+
+  len = sizeof(buf);
+  assert_int_equal(format_ok(buf, &len, "logged in"), PROTO_OK);
+  assert_reply(buf, len, "OK logged in\n");
+}
+
+static void test_format_err(void **state) {
+  (void)state;
+  for (size_t i = 0; i < sizeof(err_cases) / sizeof(err_case_t); i++) {
+    print_message("case: %s\n", err_cases[i].case_name);
+    char buf[MAX_REPLY];
+    size_t len = sizeof(buf);
+    assert_int_equal(format_err(buf, &len, err_cases[i].why), PROTO_OK);
+    assert_reply(buf, len, err_cases[i].want);
+  }
+
+  // PROTO_OK is not a failure, and nothing may be written.
+  char buf[MAX_REPLY];
+  size_t len = sizeof(buf);
+  assert_int_equal(format_err(buf, &len, PROTO_OK), PROTO_ERR_BAD_INPUT);
+  assert_int_equal(len, 0);
+}
+
+static void test_format_err_reason(void **state) {
+  (void)state;
+  char buf[MAX_REPLY];
+  size_t len = sizeof(buf);
+  assert_int_equal(format_err_reason(buf, &len, "no such user"), PROTO_OK);
+  assert_reply(buf, len, "ERR no such user\n");
+
+  len = sizeof(buf);
+  assert_int_equal(format_err_reason(buf, &len, ""), PROTO_ERR_MISSING);
+  assert_int_equal(len, 0);
+  len = sizeof(buf);
+  assert_int_equal(format_err_reason(buf, &len, NULL), PROTO_ERR_MISSING);
+  assert_int_equal(len, 0);
+}
+
+static void test_format_from(void **state) {
+  (void)state;
+  char buf[MAX_REPLY];
+  size_t len = sizeof(buf);
+  assert_int_equal(format_from(buf, &len, "alice", "hello there"), PROTO_OK);
+  assert_reply(buf, len, "FROM alice hello there\n");
+
+  len = sizeof(buf);
+  assert_int_equal(format_from(buf, &len, "", "hi"), PROTO_ERR_MISSING);
+  assert_int_equal(len, 0);
+  len = sizeof(buf);
+  assert_int_equal(format_from(buf, &len, "alice", ""), PROTO_ERR_MISSING);
+  assert_int_equal(len, 0);
+  len = sizeof(buf);
+  assert_int_equal(format_from(buf, &len, NULL, "hi"), PROTO_ERR_MISSING);
+  assert_int_equal(len, 0);
+}
+
+static void test_format_capacity_boundaries(void **state) {
+  (void)state;
+  char buf[MAX_REPLY];
+  const char *want = "OK hi\n";
+  size_t need = strlen(want);
+
+  size_t len = need; // exact fit
+  assert_int_equal(format_ok(buf, &len, "hi"), PROTO_OK);
+  assert_reply(buf, len, want);
+
+  len = need - 1; // one byte short
+  assert_int_equal(format_ok(buf, &len, "hi"), PROTO_ERR_TOO_LONG);
+  assert_int_equal(len, 0);
+
+  len = 0;
+  assert_int_equal(format_ok(buf, &len, NULL), PROTO_ERR_TOO_LONG);
+  assert_int_equal(len, 0);
+
+  len = 2; // "OK\n" needs 3
+  assert_int_equal(format_ok(buf, &len, NULL), PROTO_ERR_TOO_LONG);
+  assert_int_equal(len, 0);
+}
+
+static void test_format_from_max_fits_max_reply(void **state) {
+  (void)state;
+  char user[MAX_USERNAME + 1];
+  char text[MAX_TEXT + 1];
+  memset(user, 'u', MAX_USERNAME);
+  user[MAX_USERNAME] = '\0';
+  memset(text, 't', MAX_TEXT);
+  text[MAX_TEXT] = '\0';
+
+  char buf[MAX_REPLY];
+  size_t len = sizeof(buf);
+  assert_int_equal(format_from(buf, &len, user, text), PROTO_OK);
+  // "FROM " + user + " " + text + "\n"
+  assert_int_equal(len, 5 + MAX_USERNAME + 1 + MAX_TEXT + 1);
+  assert_int_equal(buf[len - 1], '\n');
+}
+
 int main(void) {
   const struct CMUnitTest unit_tests[] = {
       cmocka_unit_test(test_rejected_lines),
       cmocka_unit_test(test_expected_lines),
       cmocka_unit_test(test_len_bounds_parsing),
       cmocka_unit_test(test_field_limit_boundaries),
+      cmocka_unit_test(test_format_ok),
+      cmocka_unit_test(test_format_err),
+      cmocka_unit_test(test_format_err_reason),
+      cmocka_unit_test(test_format_from),
+      cmocka_unit_test(test_format_capacity_boundaries),
+      cmocka_unit_test(test_format_from_max_fits_max_reply),
   };
 
   return cmocka_run_group_tests(unit_tests, NULL, NULL);
