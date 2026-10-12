@@ -114,7 +114,7 @@ static proto_status_t parse_msg(cursor_t *c, protocol_cmd_t *out) {
 }
 
 static bool lookup_command(const char *tok, size_t n, commands_t *type) {
-  for (size_t i = 0; i < sizeof(commands) / sizeof(commands[0]); i++) {
+  for (size_t i = 0; i < sizeof(commands) / sizeof(cmd_entry_t); i++) {
     if (strlen(commands[i].name) == n &&
         memcmp(commands[i].name, tok, n) == 0) {
       *type = commands[i].type;

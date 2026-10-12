@@ -1,3 +1,4 @@
+#include <server/constants.h>
 #include <server/protocol.h>
 #include <stdbool.h>
 #include <string.h>
@@ -9,6 +10,8 @@
 #include <stddef.h>
 #include <stdint.h>
 // clang-format on
+
+#define LINE_SIZE 512
 
 // Helpers:
 static void assert_cmd_equal(const protocol_cmd_t *got,
@@ -38,6 +41,13 @@ static const bad_case_t bad_cases[] = {
     {"missing password", "LOGIN bob", PROTO_ERR_MISSING},
     {"empty field", "LOGIN  pw", PROTO_ERR_MISSING},
     {"stray CR", "QUIT\r", PROTO_ERR_BAD_INPUT},
+    {"empty line", "", PROTO_ERR_MISSING},
+    {"leading space", " LOGIN bob pw", PROTO_ERR_MISSING},
+    {"quit trailing space", "QUIT ", PROTO_ERR_BAD_INPUT},
+    {"quit extra word", "QUIT extra", PROTO_ERR_BAD_INPUT},
+    {"login extra word", "LOGIN bob pw extra", PROTO_ERR_BAD_INPUT},
+    {"login trailing space", "LOGIN bob pw ", PROTO_ERR_BAD_INPUT},
+    {"byte >= 0x80", "LOGIN bob p\xc3\xa9", PROTO_ERR_BAD_INPUT},
     {"missing msg text", "MSG alice", PROTO_ERR_MISSING},
     {
         "username over limit",
@@ -50,22 +60,14 @@ static const bad_case_t bad_cases[] = {
         PROTO_ERR_TOO_LONG,
     },
     {
-        "password over limit",
-        "LOGIN bob "
-        "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"
-        "ppppp"
-        "pppppppppppppppppppppppppppppppppppppppppppppppppppppp", // 129 'p'
-        PROTO_ERR_TOO_LONG,
+        "invalid username in login",
+        "LOGIN bob! pass",
+        PROTO_ERR_BAD_INPUT,
     },
     {
-        "msg text over limit",
-        "MSG alice "
-        "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
-        "tttt"
-        "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
-        "tttt"
-        "ttttttttttttttttttttttttttttttttttttttttttttttttttttt", // 201 't'
-        PROTO_ERR_TOO_LONG,
+        "invalid username in msg",
+        "MSG bob! HI!",
+        PROTO_ERR_BAD_INPUT,
     },
 };
 
@@ -143,10 +145,52 @@ static void test_expected_lines(void **state) {
   }
 }
 
+static void test_len_bounds_parsing(void **state) {
+  (void)state;
+  protocol_cmd_t cmd;
+  // Bytes past len must never be read.
+  assert_int_equal(parse_protocol_str("QUIT extra", 4, &cmd), PROTO_OK);
+  assert_int_equal(cmd.type, CMD_QUIT);
+  assert_int_equal(parse_protocol_str("LOGIN bob pw extra", 12, &cmd),
+                   PROTO_OK);
+  assert_string_equal(cmd.password, "pw");
+  assert_int_equal(parse_protocol_str("anything", 0, &cmd), PROTO_ERR_MISSING);
+}
+
+// Builds "<prefix><n times ch>" into buf.
+static void build_line(char *buf, const char *prefix, char ch, size_t n) {
+  size_t p = strlen(prefix);
+  memcpy(buf, prefix, p);
+  memset(buf + p, ch, n);
+  buf[p + n] = '\0';
+}
+
+static void test_field_limit_boundaries(void **state) {
+  (void)state;
+  char line[LINE_SIZE];
+  protocol_cmd_t cmd;
+
+  build_line(line, "LOGIN bob ", 'p', MAX_PASSWORD);
+  assert_int_equal(parse_protocol_str(line, strlen(line), &cmd), PROTO_OK);
+  assert_int_equal(strlen(cmd.password), MAX_PASSWORD);
+  build_line(line, "LOGIN bob ", 'p', MAX_PASSWORD + 1);
+  assert_int_equal(parse_protocol_str(line, strlen(line), &cmd),
+                   PROTO_ERR_TOO_LONG);
+
+  build_line(line, "MSG alice ", 't', MAX_TEXT);
+  assert_int_equal(parse_protocol_str(line, strlen(line), &cmd), PROTO_OK);
+  assert_int_equal(strlen(cmd.text), MAX_TEXT);
+  build_line(line, "MSG alice ", 't', MAX_TEXT + 1);
+  assert_int_equal(parse_protocol_str(line, strlen(line), &cmd),
+                   PROTO_ERR_TOO_LONG);
+}
+
 int main(void) {
   const struct CMUnitTest unit_tests[] = {
       cmocka_unit_test(test_rejected_lines),
       cmocka_unit_test(test_expected_lines),
+      cmocka_unit_test(test_len_bounds_parsing),
+      cmocka_unit_test(test_field_limit_boundaries),
   };
 
   return cmocka_run_group_tests(unit_tests, NULL, NULL);
