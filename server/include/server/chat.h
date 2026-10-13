@@ -5,6 +5,7 @@
 #include <server/poll_mgr.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <time.h>
 
 /**
  * @file chat.h
@@ -27,12 +28,13 @@ typedef enum {
  * One slot per connection; a slot is reusable once @c active is false.
  */
 typedef struct {
-  bool active;                 ///< Flag that determines if client is active.
-  int fd;                      ///< The socket file descriptor of the client.
-  StateEnum state;             ///< The state of the client.
-  char name[MAX_NAME_LEN + 1]; ///< The name string.
-  char inbuf[BUFFER_SIZE];     ///< Bytes received so far, not yet
-                               ///< newline-terminated line.
+  bool active;                  ///< Flag that determines if client is active.
+  int fd;                       ///< The socket file descriptor of the client.
+  StateEnum state;              ///< The state of the client.
+  struct timespec connected_at; ///< The time client connected to server.
+  char name[MAX_NAME_LEN + 1];  ///< The name string.
+  char inbuf[BUFFER_SIZE];      ///< Bytes received so far, not yet
+                                ///< newline-terminated line.
   size_t inlen; ///< Number of valid bytes currently held in @c inbuf.
 } chat_client_t;
 

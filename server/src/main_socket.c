@@ -47,6 +47,7 @@ int get_main_socket(unsigned short port, int *fd_out) {
     }
 
     if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+      log_perror("bind");
       close(sockfd);
       continue;
     }

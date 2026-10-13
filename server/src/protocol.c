@@ -203,7 +203,7 @@ static const err_entry_t err_reasons[] = {
     {PROTO_ERR_BAD_INPUT, "bad input"},
 };
 
-static bool is_empty(const char *s) { return s == NULL || s[0] == '\0'; }
+static bool is_empty(const char *s) { return (s == NULL || s[0] == '\0') != 0; }
 
 /// Formats one line into a scratch buffer, then copies it to @p buf if it fits.
 /// @p len is value-result: capacity in, bytes written out (0 on failure).
