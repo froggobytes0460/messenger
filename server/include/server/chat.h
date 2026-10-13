@@ -32,7 +32,7 @@ typedef struct {
   int fd;                       ///< The socket file descriptor of the client.
   StateEnum state;              ///< The state of the client.
   struct timespec connected_at; ///< The time client connected to server.
-  char name[MAX_NAME_LEN + 1];  ///< The name string.
+  char name[MAX_USERNAME + 1];  ///< The name string.
   char inbuf[BUFFER_SIZE];      ///< Bytes received so far, not yet
                                 ///< newline-terminated line.
   size_t inlen; ///< Number of valid bytes currently held in @c inbuf.

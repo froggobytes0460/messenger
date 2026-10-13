@@ -29,15 +29,6 @@ static chat_client_t *alloc_client(chat_t *chat) {
   return NULL;
 }
 
-static void announce(poll_mgr_t *mgr, int except_fd, const char *name,
-                     const char *text) {
-  char msg[MAX_NAME_LEN + MAX_ANNOUNCE_TEXT_LEN];
-  int len = snprintf(msg, sizeof(msg), "%s %s\n", name, text);
-  if (len > 0) {
-    poll_mgr_broadcast(mgr, except_fd, msg, (size_t)len);
-  }
-}
-
 // Handles one complete line (without the newline) in client->inbuf.
 static void handle_line(chat_client_t *client, poll_mgr_t *mgr) {
   if (client->inlen > 0 && client->inbuf[client->inlen - 1] == '\r') {
@@ -49,18 +40,18 @@ static void handle_line(chat_client_t *client, poll_mgr_t *mgr) {
   }
 
   if (client->state != CLIENT_AUTHENTICATED) {
-    // Usernames longer than MAX_NAME_LEN are truncated.
+    // Usernames longer than MAX_USERNAME are truncated.
     size_t name_len =
-        client->inlen < MAX_NAME_LEN ? client->inlen : MAX_NAME_LEN;
+        client->inlen < MAX_USERNAME ? client->inlen : MAX_USERNAME;
     memcpy(client->name, client->inbuf, name_len);
     client->name[name_len] = '\0';
     client->state = CLIENT_CONNECTED;
     log_info("client %d is now known as %s", client->fd, client->name);
-    announce(mgr, client->fd, client->name, "joined the chat...");
     return;
   }
 
-  char msg[MAX_NAME_LEN + 2 + BUFFER_SIZE + 2];
+  // MAX_USERNAME + 2 + BUFFER_SIZE + 2
+  char msg[MAX_USERNAME + BUFFER_SIZE + 4];
   int len = snprintf(msg, sizeof(msg), "%s: %s\n", client->name, client->inbuf);
   if (len > 0) {
     log_debug("%s: %s", client->name, client->inbuf);
@@ -109,15 +100,12 @@ static unsigned long long get_time_diff(const struct timespec *start,
 // NOLINTEND(readability-magic-numbers)
 
 static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
+  (void)mgr;
   chat_t *chat = ctx;
   log_info("client %d left", client_fd);
   chat_client_t *client = find_client(chat, client_fd);
   if (client == NULL) {
     return;
-  }
-
-  if (client->state == CLIENT_AUTHENTICATED) {
-    announce(mgr, client_fd, client->name, "left the chat...");
   }
   memset(client, 0, sizeof(*client));
 }
