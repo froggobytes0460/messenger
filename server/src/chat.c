@@ -113,6 +113,13 @@ static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
 static void on_connect(void *ctx, poll_mgr_t *mgr, int client_fd) {
   chat_t *chat = ctx;
   (void)mgr;
+  struct timespec now;
+
+  // NOLINTNEXTLINE(misc-include-cleaner)
+  if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+    log_perror("clock_gettime");
+    return;
+  }
   log_info("client %d entered", client_fd);
   chat_client_t *client = alloc_client(chat);
   if (client == NULL) {
@@ -120,10 +127,7 @@ static void on_connect(void *ctx, poll_mgr_t *mgr, int client_fd) {
   }
   client->active = true;
   client->fd = client_fd;
-  // NOLINTNEXTLINE(misc-include-cleaner)
-  if (clock_gettime(CLOCK_MONOTONIC, &client->connected_at) != 0) {
-    log_perror("clock_gettime");
-  }
+  memcpy(&client->connected_at, &now, sizeof(now));
 }
 
 static void on_tick(void *ctx, poll_mgr_t *mgr) {
