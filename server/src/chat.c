@@ -1,8 +1,8 @@
-#include "server/protocol.h"
 #include <server/chat.h>
 #include <server/constants.h>
 #include <server/log.h>
 #include <server/poll_mgr.h>
+#include <server/protocol.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
@@ -49,13 +49,81 @@ static unsigned long long get_time_diff(const struct timespec *start,
 }
 // NOLINTEND(readability-magic-numbers)
 
+// Sends a formatted reply if formatting worked; closes the client if the send
+// fails.
+static void deliver(poll_mgr_t *mgr, int client_fd, proto_status_t fmt,
+                    const char *reply, size_t len) {
+  if (fmt == PROTO_OK && poll_mgr_send(mgr, client_fd, reply, len) < 0) {
+    poll_mgr_close(mgr, client_fd);
+  }
+}
+
+static void send_ok(poll_mgr_t *mgr, int client_fd, const char *text) {
+  char reply[MAX_REPLY];
+  size_t len = sizeof(reply);
+  proto_status_t fmt = format_ok(reply, &len, text);
+  deliver(mgr, client_fd, fmt, reply, len);
+}
+
+// Only pass string literals as @p reason, never client input.
 static void send_err(poll_mgr_t *mgr, int client_fd, const char *reason) {
   char reply[MAX_REPLY];
-  size_t len_reply = sizeof(reply);
-  if (format_err_reason(reply, &len_reply, reason) == PROTO_OK) {
-    if (poll_mgr_send(mgr, client_fd, reply, len_reply) < 0) {
-      poll_mgr_close(mgr, client_fd);
-    }
+  size_t len = sizeof(reply);
+  proto_status_t fmt = format_err_reason(reply, &len, reason);
+  deliver(mgr, client_fd, fmt, reply, len);
+}
+
+static void send_proto_err(poll_mgr_t *mgr, int client_fd, proto_status_t why) {
+  char reply[MAX_REPLY];
+  size_t len = sizeof(reply);
+  proto_status_t fmt = format_err(reply, &len, why);
+  deliver(mgr, client_fd, fmt, reply, len);
+}
+
+// Best effort OK, then close: the client is gone either way.
+static void quit_client(const chat_client_t *client, poll_mgr_t *mgr) {
+  send_ok(mgr, client->fd, NULL);
+  poll_mgr_close(mgr, client->fd);
+}
+
+static void handle_connected(chat_client_t *client, poll_mgr_t *mgr,
+                             const protocol_cmd_t *cmd) {
+  switch (cmd->type) {
+  case CMD_REGISTER:
+  case CMD_LOGIN:
+    // The reply comes when the auth result is collected.
+    client->pending = *cmd;
+    client->state = CLIENT_AUTHENTICATING;
+    log_debug("client %d is authenticating", client->fd);
+    break;
+  case CMD_QUIT:
+    quit_client(client, mgr);
+    break;
+  case CMD_MSG:
+    send_err(mgr, client->fd, "not allowed");
+    break;
+  }
+}
+
+static void handle_authenticating(const chat_client_t *client,
+                                  poll_mgr_t *mgr) {
+  send_err(mgr, client->fd, "busy");
+}
+
+static void handle_authenticated(const chat_client_t *client, poll_mgr_t *mgr,
+                                 const protocol_cmd_t *cmd) {
+  switch (cmd->type) {
+  case CMD_QUIT:
+    quit_client(client, mgr);
+    break;
+  case CMD_MSG:
+    // Placeholder until MSG is routed to the target client.
+    send_ok(mgr, client->fd, NULL);
+    break;
+  case CMD_REGISTER:
+  case CMD_LOGIN:
+    send_err(mgr, client->fd, "not allowed");
+    break;
   }
 }
 
@@ -65,14 +133,21 @@ static void handle_line(chat_client_t *client, poll_mgr_t *mgr) {
   proto_status_t pt =
       client->overflow ? PROTO_ERR_TOO_LONG
                        : parse_protocol_str(client->inbuf, client->inlen, &cmd);
-  char reply[MAX_REPLY];
-  size_t len_reply = sizeof(reply);
 
-  proto_status_t fmt = (pt == PROTO_OK) ? format_ok(reply, &len_reply, NULL)
-                                        : format_err(reply, &len_reply, pt);
-
-  if (fmt == PROTO_OK && poll_mgr_send(mgr, client->fd, reply, len_reply) < 0) {
-    poll_mgr_close(mgr, client->fd);
+  if (pt != PROTO_OK) {
+    send_proto_err(mgr, client->fd, pt);
+  } else {
+    switch (client->state) {
+    case CLIENT_CONNECTED:
+      handle_connected(client, mgr, &cmd);
+      break;
+    case CLIENT_AUTHENTICATING:
+      handle_authenticating(client, mgr);
+      break;
+    case CLIENT_AUTHENTICATED:
+      handle_authenticated(client, mgr, &cmd);
+      break;
+    }
   }
 
   memset(&cmd, 0, sizeof(cmd));

@@ -17,15 +17,15 @@ typedef struct {
 } cursor_t;
 
 typedef struct {
-  const char *name;
   commands_t type;
+  const char *name;
 } cmd_entry_t;
 
 static const cmd_entry_t commands[] = {
-    {"REGISTER", CMD_REGISTER},
-    {"LOGIN", CMD_LOGIN},
-    {"MSG", CMD_MSG},
-    {"QUIT", CMD_QUIT},
+    {CMD_REGISTER, "REGISTER"},
+    {CMD_LOGIN, "LOGIN"},
+    {CMD_MSG, "MSG"},
+    {CMD_QUIT, "QUIT"},
 };
 
 /// ASCII only: rejects control characters, DEL and every byte >= 0x80.
