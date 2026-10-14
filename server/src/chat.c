@@ -5,7 +5,6 @@
 #include <server/poll_mgr.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <string.h>
 #include <time.h>
 
@@ -29,55 +28,6 @@ static chat_client_t *alloc_client(chat_t *chat) {
   return NULL;
 }
 
-// Handles one complete line (without the newline) in client->inbuf.
-static void handle_line(chat_client_t *client, poll_mgr_t *mgr) {
-  if (client->inlen > 0 && client->inbuf[client->inlen - 1] == '\r') {
-    client->inlen--;
-  }
-  client->inbuf[client->inlen] = '\0';
-  if (client->inlen == 0) {
-    return;
-  }
-
-  if (client->state != CLIENT_AUTHENTICATED) {
-    // Usernames longer than MAX_USERNAME are truncated.
-    size_t name_len =
-        client->inlen < MAX_USERNAME ? client->inlen : MAX_USERNAME;
-    memcpy(client->name, client->inbuf, name_len);
-    client->name[name_len] = '\0';
-    client->state = CLIENT_CONNECTED;
-    log_info("client %d is now known as %s", client->fd, client->name);
-    return;
-  }
-
-  // MAX_USERNAME + 2 + BUFFER_SIZE + 2
-  char msg[MAX_USERNAME + BUFFER_SIZE + 4];
-  int len = snprintf(msg, sizeof(msg), "%s: %s\n", client->name, client->inbuf);
-  if (len > 0) {
-    log_debug("%s: %s", client->name, client->inbuf);
-    poll_mgr_broadcast(mgr, client->fd, msg, (size_t)len);
-  }
-}
-
-static void on_message(void *ctx, poll_mgr_t *mgr, int sender_fd,
-                       const char *buf, size_t len) {
-  chat_t *chat = ctx;
-  chat_client_t *client = find_client(chat, sender_fd);
-  if (client == NULL) {
-    return;
-  }
-
-  for (size_t i = 0; i < len; i++) {
-    if (buf[i] == '\n') {
-      handle_line(client, mgr);
-      client->inlen = 0;
-    } else if (client->inlen < sizeof(client->inbuf) - 1) {
-      // Overlong lines are truncated: extra bytes are dropped until newline.
-      client->inbuf[client->inlen++] = buf[i];
-    }
-  }
-}
-
 // NOLINTBEGIN(readability-magic-numbers)
 static unsigned long long get_time_diff(const struct timespec *start,
                                         const struct timespec *end) {
@@ -98,6 +48,58 @@ static unsigned long long get_time_diff(const struct timespec *start,
          ((unsigned long long)diff_nsec / 1000000ULL);
 }
 // NOLINTEND(readability-magic-numbers)
+
+static void send_err(poll_mgr_t *mgr, int client_fd, const char *reason) {
+  char reply[MAX_REPLY];
+  size_t len_reply = sizeof(reply);
+  if (format_err_reason(reply, &len_reply, reason) == PROTO_OK) {
+    if (poll_mgr_send(mgr, client_fd, reply, len_reply) < 0) {
+      poll_mgr_close(mgr, client_fd);
+    }
+  }
+}
+
+// Handles one complete line (without the newline) in client->inbuf.
+static void handle_line(chat_client_t *client, poll_mgr_t *mgr) {
+  protocol_cmd_t cmd;
+  proto_status_t pt =
+      client->overflow ? PROTO_ERR_TOO_LONG
+                       : parse_protocol_str(client->inbuf, client->inlen, &cmd);
+  char reply[MAX_REPLY];
+  size_t len_reply = sizeof(reply);
+
+  proto_status_t fmt = (pt == PROTO_OK) ? format_ok(reply, &len_reply, NULL)
+                                        : format_err(reply, &len_reply, pt);
+
+  if (fmt == PROTO_OK && poll_mgr_send(mgr, client->fd, reply, len_reply) < 0) {
+    poll_mgr_close(mgr, client->fd);
+  }
+
+  memset(&cmd, 0, sizeof(cmd));
+  memset(&client->inbuf, 0, sizeof(client->inbuf));
+}
+
+static void on_message(void *ctx, poll_mgr_t *mgr, int sender_fd,
+                       const char *buf, size_t len) {
+  chat_t *chat = ctx;
+  chat_client_t *client = find_client(chat, sender_fd);
+  if (client == NULL) {
+    return;
+  }
+
+  for (size_t i = 0; i < len; i++) {
+    if (buf[i] == '\n') {
+      handle_line(client, mgr);
+      client->inlen = 0;
+      client->overflow = false;
+    } else if (client->inlen < sizeof(client->inbuf) - 1) {
+      client->inbuf[client->inlen++] = buf[i];
+    } else {
+      // Line does not fit: drop the rest of it and reject it at the newline.
+      client->overflow = true;
+    }
+  }
+}
 
 static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
   (void)mgr;
@@ -147,11 +149,7 @@ static void on_tick(void *ctx, poll_mgr_t *mgr) {
     if (get_time_diff(&chat->clients[i].connected_at, &now) >
         UNAUTH_TIMEOUT_MS) {
       log_info("client %d timed out", chat->clients[i].fd);
-      char reply[MAX_REPLY];
-      size_t len_reply = sizeof(reply);
-      if (format_err_reason(reply, &len_reply, "timeout") == PROTO_OK) {
-        poll_mgr_send(mgr, chat->clients[i].fd, reply, len_reply);
-      }
+      send_err(mgr, chat->clients[i].fd, "timeout");
       poll_mgr_close(mgr, chat->clients[i].fd);
     }
   }

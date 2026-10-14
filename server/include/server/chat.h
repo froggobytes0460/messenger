@@ -3,6 +3,7 @@
 
 #include <server/constants.h>
 #include <server/poll_mgr.h>
+#include <server/protocol.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <time.h>
@@ -28,14 +29,18 @@ typedef enum {
  * One slot per connection; a slot is reusable once @c active is false.
  */
 typedef struct {
-  bool active;                  ///< Flag that determines if client is active.
-  int fd;                       ///< The socket file descriptor of the client.
-  StateEnum state;              ///< The state of the client.
+  /// The current line did not fit in @c inbuf; it is rejected, not parsed.
+  bool overflow;
+  bool active;     ///< Flag that determines if client is active.
+  int fd;          ///< The socket file descriptor of the client.
+  StateEnum state; ///< The state of the client.
+  size_t inlen;    ///< Number of valid bytes currently held in @c inbuf.
   struct timespec connected_at; ///< The time client connected to server.
   char name[MAX_USERNAME + 1];  ///< The name string.
-  char inbuf[BUFFER_SIZE];      ///< Bytes received so far, not yet
-                                ///< newline-terminated line.
-  size_t inlen; ///< Number of valid bytes currently held in @c inbuf.
+  protocol_cmd_t pending;       ///< The pending command on this client.
+
+  /// Bytes received so far, not yet newline-terminated line.
+  char inbuf[BUFFER_SIZE];
 } chat_client_t;
 
 /**
@@ -54,8 +59,10 @@ void chat_init(chat_t *chat);
 /**
  * @brief Builds the poll manager callbacks that implement the chat room.
  *
- * Protocol: the first line a client sends is its username; every following
- * line is a chat message broadcast to everyone else.
+ * Clients speak a line protocol: REGISTER, LOGIN, MSG and QUIT, one command per
+ * line, each line ending in '\n' (no '\r'). Until the state machine lands,
+ * every well-formed line is answered "OK" and every malformed one with the
+ * matching "ERR <reason>".
  *
  * @param[in] chat Chat state, passed back to the handlers as @c ctx. Must be
  *             initialized with chat_init() and outlive the run loop.
