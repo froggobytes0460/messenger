@@ -9,3 +9,4 @@ endfunction()
 
 add_messenger_test(test_cli_args)
 add_messenger_test(test_protocol)
+add_messenger_test(test_auth)
