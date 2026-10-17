@@ -14,6 +14,7 @@
  */
 
 #include <server/constants.h>
+#include <server/uuid.h>
 #include <stdbool.h>
 
 /**
@@ -33,15 +34,8 @@ typedef enum {
  * @warning Holds plaintext password; do not log.
  */
 typedef struct {
-  auth_kind_t kind; ///< Register or log in
-
-  /// Opaque to this module: copied unchanged into the matching result.
-  int client_id;
-
-  /// Opaque to this module: lets the caller detect that @ref client_id was
-  /// reused by another client while the request was in flight.
-  unsigned client_generation;
-
+  auth_kind_t kind;                ///< Register or log in
+  client_uuid_t client_id;         ///< UUID of client
   char username[MAX_USERNAME + 1]; ///< Username (NUL terminated)
   char password[MAX_PASSWORD + 1]; ///< Password (NUL terminated)
 } auth_req_t;
@@ -64,9 +58,7 @@ typedef enum {
 typedef struct {
   auth_outcome_t outcome; ///< How the request ended
 
-  int client_id;                   ///< Copied from @ref auth_req_t::client_id
-  unsigned client_generation;      ///< Copied from
-                                   ///< @ref auth_req_t::client_generation
+  client_uuid_t client_id;         ///< Copied from @ref auth_req_t::client_id
   char username[MAX_USERNAME + 1]; ///< Username from the request
 } auth_result_t;
 

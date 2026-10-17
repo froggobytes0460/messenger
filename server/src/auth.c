@@ -68,8 +68,8 @@ bool auth_submit(const auth_req_t *req) {
 
   auth_result_t result;
   memset(&result, 0, sizeof(result));
-  result.client_id = req->client_id;
-  result.client_generation = req->client_generation;
+  memcpy(result.client_id, req->client_id, sizeof(result.client_id));
+
   int len =
       snprintf(result.username, sizeof(result.username), "%s", req->username);
   if (len < 0 || len >= (int)sizeof(result.username)) {
