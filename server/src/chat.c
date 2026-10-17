@@ -21,6 +21,26 @@ static chat_client_t *find_client(chat_t *chat, int fd) {
   return NULL;
 }
 
+static chat_client_t *find_client_by_id(chat_t *chat, client_uuid_t id) {
+  for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
+    if (chat->clients[i].active && uuid_equals(chat->clients[i].id, id)) {
+      return &chat->clients[i];
+    }
+  }
+  return NULL;
+}
+
+static chat_client_t *find_client_by_name(chat_t *chat, const char *name) {
+  for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
+    if (chat->clients[i].active &&
+        chat->clients[i].state == CLIENT_AUTHENTICATED &&
+        strcmp(name, chat->clients[i].name) == 0) {
+      return &chat->clients[i];
+    }
+  }
+  return NULL;
+}
+
 static chat_client_t *alloc_client(chat_t *chat) {
   for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
     if (!chat->clients[i].active) {
@@ -86,6 +106,70 @@ static void send_proto_err(poll_mgr_t *mgr, int client_fd, proto_status_t why) {
 static void quit_client(const chat_client_t *client, poll_mgr_t *mgr) {
   send_ok(mgr, client->fd, NULL);
   poll_mgr_close(mgr, client->fd);
+}
+
+static void drain_auth_results(chat_t *chat, poll_mgr_t *mgr) {
+  auth_result_t res;
+  while (auth_collect(&res)) {
+    chat_client_t *client = find_client_by_id(chat, res.client_id);
+    if (!client || client->state != CLIENT_AUTHENTICATING) {
+      continue;
+    }
+
+    switch (res.outcome) {
+    case AUTH_OK: {
+      if (find_client_by_name(chat, res.username)) {
+        send_err(mgr, client->fd, "already logged in");
+        client->state = CLIENT_CONNECTED;
+        continue;
+      }
+      client->state = CLIENT_AUTHENTICATED;
+      memcpy(client->name, res.username, sizeof(client->name));
+      send_ok(mgr, client->fd, NULL);
+      log_info("client %d logged in as %s", client->fd, client->name);
+      break;
+    }
+    case AUTH_BAD_CREDENTIALS:
+      if (++client->failures >= MAX_AUTH_ATTEMPTS) {
+        send_err(mgr, client->fd, "too many failed attempts");
+        poll_mgr_close(mgr, client->fd);
+        continue;
+      }
+      send_err(mgr, client->fd, "bad credentials");
+      client->state = CLIENT_CONNECTED;
+      break;
+    case AUTH_NAME_TAKEN:
+      send_err(mgr, client->fd, "name taken");
+      client->state = CLIENT_CONNECTED;
+      break;
+    case AUTH_INTERNAL:
+      send_err(mgr, client->fd, "internal issue");
+      poll_mgr_close(mgr, client->fd);
+      break;
+    }
+  }
+}
+
+static void remove_unauth_clients(chat_t *chat, poll_mgr_t *mgr) {
+  struct timespec now;
+  // NOLINTNEXTLINE(misc-include-cleaner)
+  if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+    log_perror("clock_gettime");
+    return;
+  }
+
+  for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
+    if (chat->clients[i].state == CLIENT_AUTHENTICATED ||
+        !chat->clients[i].active) {
+      continue;
+    }
+    if (get_time_diff(&chat->clients[i].connected_at, &now) >
+        UNAUTH_TIMEOUT_MS) {
+      log_info("client %d timed out", chat->clients[i].fd);
+      send_err(mgr, chat->clients[i].fd, "timeout");
+      poll_mgr_close(mgr, chat->clients[i].fd);
+    }
+  }
 }
 
 static void handle_connected(chat_client_t *client, poll_mgr_t *mgr,
@@ -228,25 +312,8 @@ static void on_connect(void *ctx, poll_mgr_t *mgr, int client_fd) {
 
 static void on_tick(void *ctx, poll_mgr_t *mgr) {
   chat_t *chat = ctx;
-  struct timespec now;
-  // NOLINTNEXTLINE(misc-include-cleaner)
-  if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
-    log_perror("clock_gettime");
-    return;
-  }
-
-  for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
-    if (chat->clients[i].state == CLIENT_AUTHENTICATED ||
-        !chat->clients[i].active) {
-      continue;
-    }
-    if (get_time_diff(&chat->clients[i].connected_at, &now) >
-        UNAUTH_TIMEOUT_MS) {
-      log_info("client %d timed out", chat->clients[i].fd);
-      send_err(mgr, chat->clients[i].fd, "timeout");
-      poll_mgr_close(mgr, chat->clients[i].fd);
-    }
-  }
+  drain_auth_results(chat, mgr);
+  remove_unauth_clients(chat, mgr);
 }
 
 void chat_init(chat_t *chat) { memset(chat, 0, sizeof(*chat)); }

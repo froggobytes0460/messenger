@@ -31,5 +31,6 @@
   256 ///< Buffer size that fits any reply line (longest is a FROM line).
 #define MAX_NUM_USERS 10000ULL ///< Maximum number of users supported by server.
 #define AUTH_QUEUE_CAP 300     ///< Limit on length of authentication queue.
+#define MAX_AUTH_ATTEMPTS 3    ///< Maximum authentication attempts allowed.
 
 #endif // !CONSTANTS_H
