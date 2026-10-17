@@ -3,6 +3,7 @@
 #include <server/log.h>
 #include <server/poll_mgr.h>
 #include <server/protocol.h>
+#include <server/uuid.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
@@ -189,17 +190,25 @@ static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
 
 static void on_connect(void *ctx, poll_mgr_t *mgr, int client_fd) {
   chat_t *chat = ctx;
-  (void)mgr;
   struct timespec now;
 
   // NOLINTNEXTLINE(misc-include-cleaner)
   if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
     log_perror("clock_gettime");
+    poll_mgr_close(mgr, client_fd);
     return;
   }
   log_info("client %d entered", client_fd);
   chat_client_t *client = alloc_client(chat);
   if (client == NULL) {
+    log_error("server full, refusing client %d", client_fd);
+    send_err(mgr, client_fd, "server full");
+    poll_mgr_close(mgr, client_fd);
+    return;
+  }
+  if (generate_uuid4(client->id) != 0) {
+    log_error("UUID generation failed for client %d", client_fd);
+    poll_mgr_close(mgr, client_fd);
     return;
   }
   client->active = true;

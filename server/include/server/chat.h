@@ -4,6 +4,7 @@
 #include <server/constants.h>
 #include <server/poll_mgr.h>
 #include <server/protocol.h>
+#include <server/uuid.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <time.h>
@@ -31,10 +32,12 @@ typedef enum {
 typedef struct {
   /// The current line did not fit in @c inbuf; it is rejected, not parsed.
   bool overflow;
-  bool active;     ///< Flag that determines if client is active.
-  int fd;          ///< The socket file descriptor of the client.
-  StateEnum state; ///< The state of the client.
-  size_t inlen;    ///< Number of valid bytes currently held in @c inbuf.
+  bool active;      ///< Flag that determines if client is active.
+  int fd;           ///< The socket file descriptor of the client.
+  int failiures;    ///< Number of failed authentication attempts.
+  StateEnum state;  ///< The state of the client.
+  size_t inlen;     ///< Number of valid bytes currently held in @c inbuf.
+  client_uuid_t id; ///< ID of client.
   struct timespec connected_at; ///< The time client connected to server.
   char name[MAX_USERNAME + 1];  ///< The name string.
   protocol_cmd_t pending;       ///< The pending command on this client.
