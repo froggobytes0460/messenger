@@ -1,3 +1,4 @@
+#include <server/auth.h>
 #include <server/chat.h>
 #include <server/constants.h>
 #include <server/log.h>
@@ -91,12 +92,21 @@ static void handle_connected(chat_client_t *client, poll_mgr_t *mgr,
                              const protocol_cmd_t *cmd) {
   switch (cmd->type) {
   case CMD_REGISTER:
-  case CMD_LOGIN:
-    // The reply comes when the auth result is collected.
-    client->pending = *cmd;
-    client->state = CLIENT_AUTHENTICATING;
-    log_debug("client %d is authenticating", client->fd);
+  case CMD_LOGIN: {
+    auth_req_t auth_req = {0};
+    auth_req.kind = cmd->type == CMD_REGISTER ? AUTH_REGISTER : AUTH_LOGIN;
+    memcpy(auth_req.client_id, client->id, sizeof(client->id));
+    memcpy(auth_req.username, cmd->username, sizeof(cmd->username));
+    memcpy(auth_req.password, cmd->password, sizeof(cmd->password));
+    if (auth_submit(&auth_req)) {
+      client->state = CLIENT_AUTHENTICATING;
+      log_debug("client %d is authenticating", client->fd);
+    } else {
+      send_err(mgr, client->fd, "busy");
+    }
+    memset(&auth_req, 0, sizeof(auth_req));
     break;
+  }
   case CMD_QUIT:
     quit_client(client, mgr);
     break;
