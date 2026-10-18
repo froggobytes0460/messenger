@@ -15,7 +15,7 @@ void log_set_level(log_level_t level) { min_level = level; }
 
 int log_open_file(const char *path) {
   FILE *file = fopen(path, "a");
-  if (file == NULL) {
+  if (!file) {
     return -1;
   }
   log_file = file;

@@ -118,7 +118,6 @@ static void reroute_msg(chat_t *chat, const protocol_cmd_t *cmd,
   proto_status_t rc = format_from(reply, &len_reply, client->name, cmd->text);
   if (rc != PROTO_OK) {
     send_proto_err(mgr, client->fd, rc);
-    send_err(mgr, client->fd, "message too long");
     return;
   }
   if (poll_mgr_send(mgr, recipient->fd, reply, len_reply) == -1) {

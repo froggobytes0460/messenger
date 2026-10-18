@@ -55,7 +55,7 @@ int get_main_socket(unsigned short port, int *fd_out) {
     break;
   }
 
-  if (p == NULL) {
+  if (!p) {
     log_error("failed to bind any address");
     freeaddrinfo(res);
     return EX_UNAVAILABLE;

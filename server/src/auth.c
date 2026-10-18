@@ -84,7 +84,7 @@ bool auth_submit(const auth_req_t *req) {
       break;
     }
     user_rec_t *slot = find_free_slot();
-    if (slot == NULL) {
+    if (!slot) {
       result.outcome = AUTH_INTERNAL;
       break;
     }
@@ -99,7 +99,7 @@ bool auth_submit(const auth_req_t *req) {
   }
   case AUTH_LOGIN: {
     user_rec_t *user = find_user(req->username);
-    if (user == NULL) {
+    if (!user) {
       result.outcome = AUTH_BAD_CREDENTIALS;
       break;
     }
