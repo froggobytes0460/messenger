@@ -29,6 +29,9 @@
 #define MAX_TEXT 200     ///< Maximum text in client requests.
 #define MAX_REPLY                                                              \
   256 ///< Buffer size that fits any reply line (longest is a FROM line).
+_Static_assert(MAX_REPLY >=
+                   sizeof("FROM ") - 1 + MAX_USERNAME + 1 + MAX_TEXT + 1 + 1,
+               "MAX_REPLY must fit \"FROM <user> <text>\\n\" and its NUL");
 #define MAX_NUM_USERS 10000ULL ///< Maximum number of users supported by server.
 #define AUTH_QUEUE_CAP 300     ///< Limit on length of authentication queue.
 #define MAX_AUTH_ATTEMPTS 3    ///< Maximum authentication attempts allowed.
