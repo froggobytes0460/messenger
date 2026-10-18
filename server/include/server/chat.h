@@ -64,9 +64,12 @@ void chat_init(chat_t *chat);
  * "ERR <reason>". Well-formed ones depend on the client state: a connected
  * client may REGISTER, LOGIN or QUIT; while authenticating every command gets
  * "ERR busy"; an authenticated client may MSG or QUIT. Anything else gets
- * "ERR not allowed". Authentication itself is not implemented yet, so a client
- * that sends REGISTER or LOGIN stays in CLIENT_AUTHENTICATING until it times
- * out.
+ * "ERR not allowed". REGISTER and LOGIN are submitted to the auth module and
+ * the client stays in CLIENT_AUTHENTICATING until the result is collected on
+ * the next tick. Success moves it to CLIENT_AUTHENTICATED (a name already
+ * logged in elsewhere is refused). Failure returns it to CLIENT_CONNECTED, and
+ * after MAX_AUTH_ATTEMPTS failures it is disconnected. Clients that never
+ * authenticate are dropped after UNAUTH_TIMEOUT_MS.
  *
  * @param[in] chat Chat state, passed back to the handlers as @c ctx. Must be
  *             initialized with chat_init() and outlive the run loop.
