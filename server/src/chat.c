@@ -102,10 +102,37 @@ static void send_proto_err(poll_mgr_t *mgr, int client_fd, proto_status_t why) {
   deliver(mgr, client_fd, fmt, reply, len);
 }
 
-// Best effort OK, then close: the client is gone either way.
-static void quit_client(const chat_client_t *client, poll_mgr_t *mgr) {
+static void reroute_msg(chat_t *chat, const protocol_cmd_t *cmd,
+                        poll_mgr_t *mgr, const chat_client_t *client) {
+  chat_client_t *recipient = find_client_by_name(chat, cmd->username);
+  if (!recipient) {
+    send_err(mgr, client->fd, "no such user");
+    return;
+  }
+  if (client == recipient) {
+    send_err(mgr, client->fd, "not allowed");
+    return;
+  }
+  char reply[MAX_REPLY];
+  size_t len_reply = sizeof(reply);
+  proto_status_t rc = format_from(reply, &len_reply, client->name, cmd->text);
+  if (rc != PROTO_OK) {
+    send_proto_err(mgr, client->fd, rc);
+    send_err(mgr, client->fd, "message too long");
+    return;
+  }
+  if (poll_mgr_send(mgr, recipient->fd, reply, len_reply) == -1) {
+    send_err(mgr, client->fd, "no such user");
+    poll_mgr_close(mgr, recipient->fd);
+    return;
+  }
   send_ok(mgr, client->fd, NULL);
-  poll_mgr_close(mgr, client->fd);
+}
+
+// Best effort OK, then close: the client is gone either way.
+static void quit_client(int client_fd, poll_mgr_t *mgr) {
+  send_ok(mgr, client_fd, NULL);
+  poll_mgr_close(mgr, client_fd);
 }
 
 static void drain_auth_results(chat_t *chat, poll_mgr_t *mgr) {
@@ -172,58 +199,57 @@ static void remove_unauth_clients(chat_t *chat, poll_mgr_t *mgr) {
   }
 }
 
+static void handle_login(const protocol_cmd_t *cmd, poll_mgr_t *mgr,
+                         chat_client_t *client) {
+  auth_req_t auth_req = {0};
+  auth_req.kind = cmd->type == CMD_REGISTER ? AUTH_REGISTER : AUTH_LOGIN;
+  memcpy(auth_req.client_id, client->id, sizeof(client->id));
+  memcpy(auth_req.username, cmd->username, sizeof(cmd->username));
+  memcpy(auth_req.password, cmd->password, sizeof(cmd->password));
+  if (auth_submit(&auth_req)) {
+    client->state = CLIENT_AUTHENTICATING;
+    log_debug("client %d is authenticating", client->fd);
+  } else {
+    send_err(mgr, client->fd, "busy");
+  }
+  memset(&auth_req, 0, sizeof(auth_req));
+}
+
 static void handle_connected(chat_client_t *client, poll_mgr_t *mgr,
                              const protocol_cmd_t *cmd) {
   switch (cmd->type) {
   case CMD_REGISTER:
   case CMD_LOGIN: {
-    auth_req_t auth_req = {0};
-    auth_req.kind = cmd->type == CMD_REGISTER ? AUTH_REGISTER : AUTH_LOGIN;
-    memcpy(auth_req.client_id, client->id, sizeof(client->id));
-    memcpy(auth_req.username, cmd->username, sizeof(cmd->username));
-    memcpy(auth_req.password, cmd->password, sizeof(cmd->password));
-    if (auth_submit(&auth_req)) {
-      client->state = CLIENT_AUTHENTICATING;
-      log_debug("client %d is authenticating", client->fd);
-    } else {
-      send_err(mgr, client->fd, "busy");
-    }
-    memset(&auth_req, 0, sizeof(auth_req));
+    handle_login(cmd, mgr, client);
     break;
   }
   case CMD_QUIT:
-    quit_client(client, mgr);
+    quit_client(client->fd, mgr);
     break;
   case CMD_MSG:
     send_err(mgr, client->fd, "not allowed");
     break;
   }
-}
-
-static void handle_authenticating(const chat_client_t *client,
-                                  poll_mgr_t *mgr) {
-  send_err(mgr, client->fd, "busy");
 }
 
 static void handle_authenticated(const chat_client_t *client, poll_mgr_t *mgr,
-                                 const protocol_cmd_t *cmd) {
+                                 const protocol_cmd_t *cmd, chat_t *chat) {
   switch (cmd->type) {
-  case CMD_QUIT:
-    quit_client(client, mgr);
-    break;
-  case CMD_MSG:
-    // Placeholder until MSG is routed to the target client.
-    send_ok(mgr, client->fd, NULL);
-    break;
   case CMD_REGISTER:
   case CMD_LOGIN:
     send_err(mgr, client->fd, "not allowed");
+    break;
+  case CMD_MSG:
+    reroute_msg(chat, cmd, mgr, client);
+    break;
+  case CMD_QUIT:
+    quit_client(client->fd, mgr);
     break;
   }
 }
 
 // Handles one complete line (without the newline) in client->inbuf.
-static void handle_line(chat_client_t *client, poll_mgr_t *mgr) {
+static void handle_line(chat_client_t *client, poll_mgr_t *mgr, chat_t *chat) {
   protocol_cmd_t cmd;
   proto_status_t pt =
       client->overflow ? PROTO_ERR_TOO_LONG
@@ -237,10 +263,10 @@ static void handle_line(chat_client_t *client, poll_mgr_t *mgr) {
       handle_connected(client, mgr, &cmd);
       break;
     case CLIENT_AUTHENTICATING:
-      handle_authenticating(client, mgr);
+      send_err(mgr, client->fd, "busy");
       break;
     case CLIENT_AUTHENTICATED:
-      handle_authenticated(client, mgr, &cmd);
+      handle_authenticated(client, mgr, &cmd, chat);
       break;
     }
   }
@@ -253,13 +279,13 @@ static void on_message(void *ctx, poll_mgr_t *mgr, int sender_fd,
                        const char *buf, size_t len) {
   chat_t *chat = ctx;
   chat_client_t *client = find_client(chat, sender_fd);
-  if (client == NULL) {
+  if (!client) {
     return;
   }
 
   for (size_t i = 0; i < len; i++) {
     if (buf[i] == '\n') {
-      handle_line(client, mgr);
+      handle_line(client, mgr, chat);
       client->inlen = 0;
       client->overflow = false;
     } else if (client->inlen < sizeof(client->inbuf) - 1) {
@@ -276,7 +302,7 @@ static void on_disconnect(void *ctx, poll_mgr_t *mgr, int client_fd) {
   chat_t *chat = ctx;
   log_info("client %d left", client_fd);
   chat_client_t *client = find_client(chat, client_fd);
-  if (client == NULL) {
+  if (!client) {
     return;
   }
   memset(client, 0, sizeof(*client));
@@ -294,7 +320,7 @@ static void on_connect(void *ctx, poll_mgr_t *mgr, int client_fd) {
   }
   log_info("client %d entered", client_fd);
   chat_client_t *client = alloc_client(chat);
-  if (client == NULL) {
+  if (!client) {
     log_error("server full, refusing client %d", client_fd);
     send_err(mgr, client_fd, "server full");
     poll_mgr_close(mgr, client_fd);
