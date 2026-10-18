@@ -125,6 +125,8 @@ static void reroute_msg(chat_t *chat, const protocol_cmd_t *cmd,
     poll_mgr_close(mgr, recipient->fd);
     return;
   }
+  log_debug("client %d -> client %d: message routed", client->fd,
+            recipient->fd);
   send_ok(mgr, client->fd, NULL);
 }
 
