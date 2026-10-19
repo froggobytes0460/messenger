@@ -4,6 +4,8 @@ project(Messenger LANGUAGES C)
 add_library(compiler_flags INTERFACE)
 target_compile_options(compiler_flags INTERFACE -Wall -Wextra -Wpedantic)
 
+find_package(SQLite3 REQUIRED) # Arch package: sqlite
+
 add_subdirectory(client/)
 add_subdirectory(server/)
 
