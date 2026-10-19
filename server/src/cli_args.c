@@ -25,12 +25,13 @@ int parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
   }
 
   // Sensible default values
+  args_out->verbose = DEFAULT_VERBOSITY;
   args_out->portNumber = PORT_NUMBER_DEFAULT;
   args_out->backlog = BACKLOG_DEFAULT;
   args_out->logFile = NULL;
-  args_out->verbose = DEFAULT_VERBOSITY;
+  args_out->databasePath = DEFAULT_DB_PATH;
 
-  const char *optstring = "p:b:l:v";
+  const char *optstring = "p:b:l:d:v";
   int opt;
   long value;
 
@@ -56,13 +57,17 @@ int parse_args(struct ParsedArgs *args_out, int argc, char *argv[]) {
     case 'l':
       args_out->logFile = optarg;
       break;
+    case 'd':
+      args_out->databasePath = optarg;
+      break;
     case 'v':
       args_out->verbose = true;
       break;
     default:
-      (void)fprintf(stderr,
-                    "Usage: %s [-p port] [-b backlog] [-l logfile] [-v]\n",
-                    argv[0]);
+      (void)fprintf(
+          stderr,
+          "Usage: %s [-p port] [-b backlog] [-l logfile] [-d dbpath] [-v]\n",
+          argv[0]);
       return EXIT_FAILURE;
     }
   }
