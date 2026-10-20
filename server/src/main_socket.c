@@ -10,9 +10,9 @@
 
 #define LOG_TAG "main_socket"
 
-int get_main_socket(unsigned short port, int *fd_out) {
+int get_main_socket(unsigned short port, int* fd_out) {
   struct addrinfo hints;
-  struct addrinfo *res;
+  struct addrinfo* res;
 
   // Convert port to string.
   char port_str[MAX_PORT_STR_LEN];
@@ -28,7 +28,7 @@ int get_main_socket(unsigned short port, int *fd_out) {
     return EX_NOHOST;
   }
 
-  struct addrinfo *p;
+  struct addrinfo* p;
   int sockfd;
 
   for (p = res; p != NULL; p = p->ai_next) {

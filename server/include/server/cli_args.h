@@ -14,13 +14,13 @@
 struct ParsedArgs {
   /// Verbosity of program; if true, then debug statements are logged.
   bool verbose;
-  unsigned short portNumber; ///< The port number to listen on.
+  unsigned short portNumber;  ///< The port number to listen on.
   /// The number of connections that are allowed to be on queue/backlog.
   unsigned backlog;
   /// File to append log lines to (in addition to stderr), or NULL for none.
   /// Points into @c argv , so it lives as long as the program.
-  const char *logFile;
-  const char *databasePath; ///< The path to database.
+  const char* logFile;
+  const char* databasePath;  ///< The path to database.
 };
 
 /**
@@ -31,6 +31,6 @@ struct ParsedArgs {
  * @param[in] argv The argv passed to @c main
  * @return 0 on success, @c EXIT_FAILURE on invalid arguments.
  */
-int parse_args(struct ParsedArgs *args_out, int argc, char *argv[]);
+int parse_args(struct ParsedArgs* args_out, int argc, char* argv[]);
 
-#endif // !CLI_ARGS_H
+#endif  // !CLI_ARGS_H

@@ -1,16 +1,17 @@
-#include "server/user_store.h"
 #include <server/chat.h>
 #include <server/cli_args.h>
 #include <server/log.h>
 #include <server/main_socket.h>
 #include <server/poll_mgr.h>
+#include <server/user_store.h>
 #include <sys/socket.h>
 #include <sysexits.h>
 #include <unistd.h>
 
 #define LOG_TAG "main"
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
+  // NOLINTNEXTLINE(readability-implicit-bool-conversion)
   struct ParsedArgs cli_args = {0};
 
   int rc = parse_args(&cli_args, argc, argv);
@@ -18,7 +19,7 @@ int main(int argc, char *argv[]) {
     return rc;
   }
 
-  user_store_t *user_store = user_store_open(cli_args.databasePath);
+  user_store_t* user_store = user_store_open(cli_args.databasePath);
   if (!user_store) {
     log_error("Error in opening database %s", cli_args.databasePath);
     return EX_DATAERR;

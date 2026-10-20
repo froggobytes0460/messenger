@@ -7,14 +7,14 @@
 #include <time.h>
 
 static log_level_t min_level = LOG_LEVEL_INFO;
-static FILE *log_file = NULL; ///< NULL when no log file is open.
+static FILE* log_file = NULL;  ///< NULL when no log file is open.
 
-static const char *const level_names[] = {"DEBUG", "INFO", "WARN", "ERROR"};
+static const char* const level_names[] = {"DEBUG", "INFO", "WARN", "ERROR"};
 
 void log_set_level(log_level_t level) { min_level = level; }
 
-int log_open_file(const char *path) {
-  FILE *file = fopen(path, "a");
+int log_open_file(const char* path) {
+  FILE* file = fopen(path, "a");
   if (!file) {
     return -1;
   }
@@ -29,7 +29,7 @@ void log_close(void) {
   }
 }
 
-void log_write(log_level_t level, const char *tag, const char *fmt, ...) {
+void log_write(log_level_t level, const char* tag, const char* fmt, ...) {
   if (level < min_level) {
     return;
   }
@@ -54,11 +54,11 @@ void log_write(log_level_t level, const char *tag, const char *fmt, ...) {
   if (log_file != NULL) {
     (void)fprintf(log_file, "%s %-5s [%s] %s\n", stamp, level_names[level], tag,
                   body);
-    (void)fflush(log_file); // Keep the file current if the server is killed.
+    (void)fflush(log_file);  // Keep the file current if the server is killed.
   }
 }
 
-void log_errno(const char *tag, const char *msg) {
+void log_errno(const char* tag, const char* msg) {
   int saved = errno;
   log_write(LOG_LEVEL_ERROR, tag, "%s: %s", msg, strerror(saved));
 }

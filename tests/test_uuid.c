@@ -13,7 +13,7 @@
 #define UUID_VERSION_BYTE 6
 #define UUID_VARIANT_BYTE 8
 
-static void test_version_and_variant_bits(void **state) {
+static void test_version_and_variant_bits(void** state) {
   (void)state;
   for (int i = 0; i < UUID_ITERATIONS; i++) {
     client_uuid_t id;
@@ -25,7 +25,7 @@ static void test_version_and_variant_bits(void **state) {
   }
 }
 
-static void test_calls_differ(void **state) {
+static void test_calls_differ(void** state) {
   (void)state;
   client_uuid_t a;
   client_uuid_t b;
@@ -34,7 +34,7 @@ static void test_calls_differ(void **state) {
   assert_memory_not_equal(a, b, UUID_LEN_BYTES);
 }
 
-static void test_equals_same_value(void **state) {
+static void test_equals_same_value(void** state) {
   (void)state;
   client_uuid_t a;
   client_uuid_t copy;
@@ -44,7 +44,7 @@ static void test_equals_same_value(void **state) {
   assert_true(uuid_equals(a, a));
 }
 
-static void test_equals_differs_in_any_byte(void **state) {
+static void test_equals_differs_in_any_byte(void** state) {
   (void)state;
   client_uuid_t a;
   assert_int_equal(generate_uuid4(a), 0);

@@ -17,8 +17,8 @@
  * @brief The state of a client connected to server.
  */
 typedef enum {
-  CLIENT_CONNECTED,      ///< The client has just connected
-  CLIENT_AUTHENTICATING, ///< The client is authenticating.
+  CLIENT_CONNECTED,       ///< The client has just connected
+  CLIENT_AUTHENTICATING,  ///< The client is authenticating.
   /// The client is authenticated, and can send/receive msgs.
   CLIENT_AUTHENTICATED,
 } StateEnum;
@@ -31,14 +31,14 @@ typedef enum {
 typedef struct {
   /// The current line did not fit in @c inbuf; it is rejected, not parsed.
   bool overflow;
-  bool active;      ///< Flag that determines if client is active.
-  int fd;           ///< The socket file descriptor of the client.
-  int failures;     ///< Number of failed authentication attempts.
-  StateEnum state;  ///< The state of the client.
-  size_t inlen;     ///< Number of valid bytes currently held in @c inbuf.
-  client_uuid_t id; ///< ID of client.
-  struct timespec connected_at; ///< The time client connected to server.
-  char name[MAX_USERNAME + 1];  ///< The name string.
+  bool active;       ///< Flag that determines if client is active.
+  int fd;            ///< The socket file descriptor of the client.
+  int failures;      ///< Number of failed authentication attempts.
+  StateEnum state;   ///< The state of the client.
+  size_t inlen;      ///< Number of valid bytes currently held in @c inbuf.
+  client_uuid_t id;  ///< ID of client.
+  struct timespec connected_at;  ///< The time client connected to server.
+  char name[MAX_USERNAME + 1];   ///< The name string.
   /// Bytes received so far, not yet newline-terminated line.
   char inbuf[BUFFER_SIZE];
 } chat_client_t;
@@ -47,14 +47,14 @@ typedef struct {
  * @brief Chat room state: all client slots.
  */
 typedef struct {
-  chat_client_t clients[MAX_CONNECTIONS]; ///< Fixed pool of client slots.
+  chat_client_t clients[MAX_CONNECTIONS];  ///< Fixed pool of client slots.
 } chat_t;
 
 /**
  * @brief Initializes a chat room, marking every client slot as unused.
  * @param[out] chat Chat state to initialize.
  */
-void chat_init(chat_t *chat);
+void chat_init(chat_t* chat);
 
 /**
  * @brief Builds the poll manager callbacks that implement the chat room.
@@ -75,6 +75,6 @@ void chat_init(chat_t *chat);
  *             initialized with chat_init() and outlive the run loop.
  * @return Callbacks to pass to poll_mgr_run().
  */
-poll_callback_t chat_callbacks(chat_t *chat);
+poll_callback_t chat_callbacks(chat_t* chat);
 
-#endif // !CHAT_H
+#endif  // !CHAT_H

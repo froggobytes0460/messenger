@@ -23,10 +23,10 @@
  * @brief Severity of a log message, in increasing order.
  */
 typedef enum {
-  LOG_LEVEL_DEBUG, ///< Verbose detail, such as message contents.
-  LOG_LEVEL_INFO,  ///< Normal events: startup, connects, disconnects.
-  LOG_LEVEL_WARN,  ///< Unexpected but recoverable.
-  LOG_LEVEL_ERROR, ///< An operation failed.
+  LOG_LEVEL_DEBUG,  ///< Verbose detail, such as message contents.
+  LOG_LEVEL_INFO,   ///< Normal events: startup, connects, disconnects.
+  LOG_LEVEL_WARN,   ///< Unexpected but recoverable.
+  LOG_LEVEL_ERROR,  ///< An operation failed.
 } log_level_t;
 
 /**
@@ -42,7 +42,7 @@ void log_set_level(log_level_t level);
  * @return 0 on success, -1 on failure with @c errno set. On failure logging
  * continues on stderr only.
  */
-int log_open_file(const char *path);
+int log_open_file(const char* path);
 
 /**
  * @brief Closes the log file opened by log_open_file(), if any.
@@ -56,7 +56,7 @@ void log_close(void);
  * @param[in] tag Name of the component logging, such as @c "chat" .
  * @param[in] fmt @c printf -style format string.
  */
-void log_write(log_level_t level, const char *tag, const char *fmt, ...)
+void log_write(log_level_t level, const char* tag, const char* fmt, ...)
     __attribute__((format(printf, 3, 4)));
 
 /**
@@ -65,7 +65,7 @@ void log_write(log_level_t level, const char *tag, const char *fmt, ...)
  * @param[in] tag Name of the component logging.
  * @param[in] msg The operation that failed, such as @c "accept" .
  */
-void log_errno(const char *tag, const char *msg);
+void log_errno(const char* tag, const char* msg);
 
 #define log_debug(...) log_write(LOG_LEVEL_DEBUG, LOG_TAG, __VA_ARGS__)
 #define log_info(...) log_write(LOG_LEVEL_INFO, LOG_TAG, __VA_ARGS__)
@@ -74,4 +74,4 @@ void log_errno(const char *tag, const char *msg);
 /// Logs @c errno after the failed operation @p msg .
 #define log_perror(msg) log_errno(LOG_TAG, msg)
 
-#endif // !LOG_H
+#endif  // !LOG_H

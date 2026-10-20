@@ -6,14 +6,14 @@
 
 #define LOG_TAG "uuid"
 
-#define UUID_VERSION_IDX 6
-#define UUID_VARIANT_IDX 8
+#define UUID_VERSION_IDX 6U
+#define UUID_VARIANT_IDX 8U
 
-#define UUID_V4_MASK 0x0F
-#define UUID_V4_MARKER 0x40
+#define UUID_V4_MASK 0x0FU
+#define UUID_V4_MARKER 0x40U
 
-#define UUID_VAR_MASK 0x3F
-#define UUID_VAR_MARKER 0x80
+#define UUID_VAR_MASK 0x3FU
+#define UUID_VAR_MARKER 0x80U
 
 int generate_uuid4(client_uuid_t out) {
   if (getentropy(out, sizeof(client_uuid_t)) != 0) {

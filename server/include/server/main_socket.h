@@ -13,6 +13,6 @@
  * @return 0 on success, otherwise a non-zero sysexits.h code suitable as the
  * exit code of @c main .
  */
-int get_main_socket(unsigned short port, int *fd_out);
+int get_main_socket(unsigned short port, int* fd_out);
 
-#endif // !MAIN_SOCKET_H
+#endif  // !MAIN_SOCKET_H

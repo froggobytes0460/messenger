@@ -12,8 +12,8 @@
 // clang-format on
 
 #define RECOGNIZABLE_UNINIT_VAL 0xAB
-#define CAROL_ID 42 ///< Client id used for the successful registration
-#define GHOST_ID 43 ///< Client id used for the failed login
+#define CAROL_ID 42  ///< Client id used for the successful registration
+#define GHOST_ID 43  ///< Client id used for the failed login
 
 // The user table and result queue are file-level statics in auth.c, so state
 // persists between tests in this binary. Every test uses its own usernames.
@@ -24,7 +24,7 @@ static void uuid_from_int(client_uuid_t out, uint32_t n) {
   memcpy(out, &n, sizeof(n));
 }
 
-static auth_req_t make_req(auth_kind_t kind, const char *user, uint32_t id) {
+static auth_req_t make_req(auth_kind_t kind, const char* user, uint32_t id) {
   auth_req_t req;
   memset(&req, 0, sizeof(req));
   req.kind = kind;
@@ -35,7 +35,7 @@ static auth_req_t make_req(auth_kind_t kind, const char *user, uint32_t id) {
 }
 
 /// Submits a request and collects its single result.
-static auth_result_t run(auth_kind_t kind, const char *user, uint32_t id) {
+static auth_result_t run(auth_kind_t kind, const char* user, uint32_t id) {
   auth_req_t req = make_req(kind, user, id);
   assert_true(auth_submit(&req));
   auth_result_t res;
@@ -43,24 +43,24 @@ static auth_result_t run(auth_kind_t kind, const char *user, uint32_t id) {
   return res;
 }
 
-static void test_register_then_login(void **state) {
+static void test_register_then_login(void** state) {
   (void)state;
   assert_int_equal(run(AUTH_REGISTER, "alice", 1).outcome, AUTH_OK);
   assert_int_equal(run(AUTH_LOGIN, "alice", 1).outcome, AUTH_OK);
 }
 
-static void test_register_twice(void **state) {
+static void test_register_twice(void** state) {
   (void)state;
   assert_int_equal(run(AUTH_REGISTER, "bob", 1).outcome, AUTH_OK);
   assert_int_equal(run(AUTH_REGISTER, "bob", 2).outcome, AUTH_NAME_TAKEN);
 }
 
-static void test_login_unknown_user(void **state) {
+static void test_login_unknown_user(void** state) {
   (void)state;
   assert_int_equal(run(AUTH_LOGIN, "nobody", 1).outcome, AUTH_BAD_CREDENTIALS);
 }
 
-static void test_result_echoes_request(void **state) {
+static void test_result_echoes_request(void** state) {
   (void)state;
   client_uuid_t want;
 
@@ -77,7 +77,7 @@ static void test_result_echoes_request(void **state) {
   assert_string_equal(res.username, "ghost");
 }
 
-static void test_collect_empty_leaves_out_untouched(void **state) {
+static void test_collect_empty_leaves_out_untouched(void** state) {
   (void)state;
   auth_result_t res;
   memset(&res, RECOGNIZABLE_UNINIT_VAL, sizeof(res));
@@ -86,7 +86,7 @@ static void test_collect_empty_leaves_out_untouched(void **state) {
   assert_memory_equal(&res, &before, sizeof(res));
 }
 
-static void test_queue_full_and_order(void **state) {
+static void test_queue_full_and_order(void** state) {
   (void)state;
   // One extra UUID for the request that overflows the queue.
   client_uuid_t uuids[AUTH_QUEUE_CAP + 1];
@@ -100,7 +100,7 @@ static void test_queue_full_and_order(void **state) {
     assert_true(auth_submit(&req));
   }
   memcpy(req.client_id, uuids[AUTH_QUEUE_CAP], sizeof(req.client_id));
-  assert_false(auth_submit(&req)); // full: rejected, no result will follow
+  assert_false(auth_submit(&req));  // full: rejected, no result will follow
 
   // Results come back oldest first.
   auth_result_t res;

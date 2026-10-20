@@ -14,8 +14,8 @@
 #define LINE_SIZE 512
 
 // Helpers:
-static void assert_cmd_equal(const protocol_cmd_t *got,
-                             const protocol_cmd_t *want) {
+static void assert_cmd_equal(const protocol_cmd_t* got,
+                             const protocol_cmd_t* want) {
   assert_int_equal(got->type, want->type);
   assert_string_equal(got->username, want->username);
   assert_string_equal(got->password, want->password);
@@ -24,15 +24,15 @@ static void assert_cmd_equal(const protocol_cmd_t *got,
 
 // Parameterized testing case structures:
 typedef struct {
-  const char *case_name;
-  const char *line;
+  const char* case_name;
+  const char* line;
   const proto_status_t rc;
 } bad_case_t;
 
 typedef struct {
-  const char *case_name;
-  const char *line;
-  const protocol_cmd_t *expected;
+  const char* case_name;
+  const char* line;
+  const protocol_cmd_t* expected;
 } expected_case_t;
 
 // Parameters for tests.
@@ -51,12 +51,12 @@ static const bad_case_t bad_cases[] = {
     {"missing msg text", "MSG alice", PROTO_ERR_MISSING},
     {
         "username over limit",
-        "LOGIN aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pw", // 33 'a'
+        "LOGIN aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pw",  // 33 'a'
         PROTO_ERR_TOO_LONG,
     },
     {
         "msg recipient over limit",
-        "MSG aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa hi", // 33 'a'
+        "MSG aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa hi",  // 33 'a'
         PROTO_ERR_TOO_LONG,
     },
     {
@@ -71,32 +71,32 @@ static const bad_case_t bad_cases[] = {
     },
     {
         "username char below digit range",
-        "LOGIN a/b pw", // '/' is just before '0'
+        "LOGIN a/b pw",  // '/' is just before '0'
         PROTO_ERR_BAD_INPUT,
     },
     {
         "username char above digit range",
-        "LOGIN a:b pw", // ':' is just after '9'
+        "LOGIN a:b pw",  // ':' is just after '9'
         PROTO_ERR_BAD_INPUT,
     },
     {
         "username char below upper range",
-        "LOGIN a@b pw", // '@' is just before 'A'
+        "LOGIN a@b pw",  // '@' is just before 'A'
         PROTO_ERR_BAD_INPUT,
     },
     {
         "username char above upper range",
-        "LOGIN a[b pw", // '[' is just after 'Z'
+        "LOGIN a[b pw",  // '[' is just after 'Z'
         PROTO_ERR_BAD_INPUT,
     },
     {
         "username char below lower range",
-        "LOGIN a`b pw", // '`' is just before 'a'
+        "LOGIN a`b pw",  // '`' is just before 'a'
         PROTO_ERR_BAD_INPUT,
     },
     {
         "username char above lower range",
-        "LOGIN a{b pw", // '{' is just after 'z'
+        "LOGIN a{b pw",  // '{' is just after 'z'
         PROTO_ERR_BAD_INPUT,
     },
     {
@@ -173,7 +173,7 @@ static const expected_case_t expected_cases[] = {
     },
     {
         "username at max length",
-        "LOGIN aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pw", // 32 'a'
+        "LOGIN aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pw",  // 32 'a'
         &(const protocol_cmd_t){
             .type = CMD_LOGIN,
             .username = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -183,7 +183,7 @@ static const expected_case_t expected_cases[] = {
 };
 
 // Tests:
-static void test_rejected_lines(void **state) {
+static void test_rejected_lines(void** state) {
   (void)state;
   for (size_t i = 0; i < sizeof(bad_cases) / sizeof(bad_case_t); i++) {
     print_message("case: %s\n", bad_cases[i].case_name);
@@ -194,7 +194,7 @@ static void test_rejected_lines(void **state) {
   }
 }
 
-static void test_expected_lines(void **state) {
+static void test_expected_lines(void** state) {
   (void)state;
   for (size_t i = 0; i < sizeof(expected_cases) / sizeof(expected_case_t);
        i++) {
@@ -207,7 +207,7 @@ static void test_expected_lines(void **state) {
   }
 }
 
-static void test_len_bounds_parsing(void **state) {
+static void test_len_bounds_parsing(void** state) {
   (void)state;
   protocol_cmd_t cmd;
   // Bytes past len must never be read.
@@ -220,14 +220,14 @@ static void test_len_bounds_parsing(void **state) {
 }
 
 // Builds "<prefix><n times ch>" into buf.
-static void build_line(char *buf, const char *prefix, char ch, size_t n) {
+static void build_line(char* buf, const char* prefix, char ch, size_t n) {
   size_t p = strlen(prefix);
   memcpy(buf, prefix, p);
   memset(buf + p, ch, n);
   buf[p + n] = '\0';
 }
 
-static void test_field_limit_boundaries(void **state) {
+static void test_field_limit_boundaries(void** state) {
   (void)state;
   char line[LINE_SIZE];
   protocol_cmd_t cmd;
@@ -249,9 +249,9 @@ static void test_field_limit_boundaries(void **state) {
 
 // Reply formatting:
 typedef struct {
-  const char *case_name;
+  const char* case_name;
   proto_status_t why;
-  const char *want;
+  const char* want;
 } err_case_t;
 
 static const err_case_t err_cases[] = {
@@ -262,12 +262,12 @@ static const err_case_t err_cases[] = {
 };
 
 // Asserts the bytes written (not NUL terminated) and the value-result length.
-static void assert_reply(const char *buf, size_t len, const char *want) {
+static void assert_reply(const char* buf, size_t len, const char* want) {
   assert_int_equal(len, strlen(want));
   assert_memory_equal(buf, want, len);
 }
 
-static void test_format_ok(void **state) {
+static void test_format_ok(void** state) {
   (void)state;
   char buf[MAX_REPLY];
   size_t len = sizeof(buf);
@@ -279,7 +279,7 @@ static void test_format_ok(void **state) {
   assert_reply(buf, len, "OK logged in\n");
 }
 
-static void test_format_err(void **state) {
+static void test_format_err(void** state) {
   (void)state;
   for (size_t i = 0; i < sizeof(err_cases) / sizeof(err_case_t); i++) {
     print_message("case: %s\n", err_cases[i].case_name);
@@ -296,7 +296,7 @@ static void test_format_err(void **state) {
   assert_int_equal(len, 0);
 }
 
-static void test_format_err_reason(void **state) {
+static void test_format_err_reason(void** state) {
   (void)state;
   char buf[MAX_REPLY];
   size_t len = sizeof(buf);
@@ -311,7 +311,7 @@ static void test_format_err_reason(void **state) {
   assert_int_equal(len, 0);
 }
 
-static void test_format_from(void **state) {
+static void test_format_from(void** state) {
   (void)state;
   char buf[MAX_REPLY];
   size_t len = sizeof(buf);
@@ -329,17 +329,17 @@ static void test_format_from(void **state) {
   assert_int_equal(len, 0);
 }
 
-static void test_format_capacity_boundaries(void **state) {
+static void test_format_capacity_boundaries(void** state) {
   (void)state;
   char buf[MAX_REPLY];
-  const char *want = "OK hi\n";
+  const char* want = "OK hi\n";
   size_t need = strlen(want);
 
-  size_t len = need; // exact fit
+  size_t len = need;  // exact fit
   assert_int_equal(format_ok(buf, &len, "hi"), PROTO_OK);
   assert_reply(buf, len, want);
 
-  len = need - 1; // one byte short
+  len = need - 1;  // one byte short
   assert_int_equal(format_ok(buf, &len, "hi"), PROTO_ERR_TOO_LONG);
   assert_int_equal(len, 0);
 
@@ -347,12 +347,12 @@ static void test_format_capacity_boundaries(void **state) {
   assert_int_equal(format_ok(buf, &len, NULL), PROTO_ERR_TOO_LONG);
   assert_int_equal(len, 0);
 
-  len = 2; // "OK\n" needs 3
+  len = 2;  // "OK\n" needs 3
   assert_int_equal(format_ok(buf, &len, NULL), PROTO_ERR_TOO_LONG);
   assert_int_equal(len, 0);
 }
 
-static void test_format_from_max_fits_max_reply(void **state) {
+static void test_format_from_max_fits_max_reply(void** state) {
   (void)state;
   char user[MAX_USERNAME + 1];
   char text[MAX_TEXT + 1];

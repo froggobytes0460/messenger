@@ -28,4 +28,4 @@ int generate_uuid4(client_uuid_t out);
  */
 bool uuid_equals(const client_uuid_t a, const client_uuid_t b);
 
-#endif // !UUID_H
+#endif  // !UUID_H
