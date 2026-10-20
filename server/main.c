@@ -1,3 +1,4 @@
+#include "server/user_store.h"
 #include <server/chat.h>
 #include <server/cli_args.h>
 #include <server/log.h>
@@ -11,9 +12,16 @@
 
 int main(int argc, char *argv[]) {
   struct ParsedArgs cli_args = {0};
+
   int rc = parse_args(&cli_args, argc, argv);
   if (rc != 0) {
     return rc;
+  }
+
+  user_store_t *user_store = user_store_open(cli_args.databasePath);
+  if (!user_store) {
+    log_error("Error in opening database %s", cli_args.databasePath);
+    return EX_DATAERR;
   }
 
   if (cli_args.logFile != NULL && log_open_file(cli_args.logFile) != 0) {
@@ -55,6 +63,7 @@ int main(int argc, char *argv[]) {
 
 cleanup_and_exit:
   close(listen_fd);
+  user_store_close(user_store);
   log_close();
   return rc;
 }

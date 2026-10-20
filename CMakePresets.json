@@ -34,7 +34,7 @@
       "description": "Preset for release builds.",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_FLAGS_DEBUG": "-O3 -DNDEBUG"
+        "CMAKE_C_FLAGS_RELEASE": "-O3 -DNDEBUG"
       }
     }
   ],
