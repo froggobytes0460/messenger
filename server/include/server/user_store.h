@@ -13,7 +13,7 @@ typedef enum {
   DB_OK,        ///< Database operation successful.
   DB_EXISTS,    ///< Item exists in database already.
   DB_NOT_FOUND, ///< No result found for database query.
-  DB_ERROR,     ///< Some internal error occurred during databse operation.
+  DB_ERROR,     ///< Some internal error occurred during database operation.
 } database_result_t;
 
 /// Opaque handle to the user database. Meant for public use.
@@ -43,7 +43,7 @@ database_result_t user_store_create(user_store_t *store, const char *username,
 
 /**
  * @brief Query user store for password hash of an user.
- * @param[in] store The user store to add user to.
+ * @param[in] store The user store to query for password hash.
  * @param[in] username The username.
  * @param[out] pass_hash_out The string array to store password hash in.
  * @param[in] pass_hash_len The length of password hash.
