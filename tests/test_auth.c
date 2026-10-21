@@ -1,5 +1,6 @@
 #include <server/auth.h>
 #include <server/constants.h>
+#include <server/user_store.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -9,15 +10,11 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "server/uuid.h"
 // clang-format on
 
 #define RECOGNIZABLE_UNINIT_VAL 0xAB
 #define CAROL_ID 42  ///< Client id used for the successful registration
 #define GHOST_ID 43  ///< Client id used for the failed login
-
-// The user table and result queue are file-level statics in auth.c, so state
-// persists between tests in this binary. Every test uses its own usernames.
 
 /// Builds a distinct, deterministic UUID from an integer.
 static void uuid_from_int(client_uuid_t out, uint32_t n) {
@@ -118,14 +115,28 @@ static void test_queue_full_and_order(void** state) {
       memcmp(res.client_id, uuids[AUTH_QUEUE_CAP], sizeof(client_uuid_t)) == 0);
 }
 
+static int setup_tests(void** state) {
+  *state = user_store_open(":memory:");
+  auth_init(*state);
+  return 0;
+}
+
+static int teardown_tests(void** state) {
+  user_store_close(*state);
+  return 0;
+}
+
+#define TEST(fn) \
+  cmocka_unit_test_setup_teardown(fn, setup_tests, teardown_tests)
+
 int main(void) {
   const struct CMUnitTest unit_tests[] = {
-      cmocka_unit_test(test_register_then_login),
-      cmocka_unit_test(test_register_twice),
-      cmocka_unit_test(test_login_unknown_user),
-      cmocka_unit_test(test_result_echoes_request),
-      cmocka_unit_test(test_collect_empty_leaves_out_untouched),
-      cmocka_unit_test(test_queue_full_and_order),
+      TEST(test_register_then_login),
+      TEST(test_register_twice),
+      TEST(test_login_unknown_user),
+      TEST(test_result_echoes_request),
+      TEST(test_collect_empty_leaves_out_untouched),
+      TEST(test_queue_full_and_order),
   };
 
   return cmocka_run_group_tests(unit_tests, NULL, NULL);
