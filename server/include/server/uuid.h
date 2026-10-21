@@ -21,11 +21,4 @@ typedef uint8_t client_uuid_t[UUID_LEN_BYTES];
  */
 int generate_uuid4(client_uuid_t out);
 
-/**
- * @brief Compares two UUIDs.
- * @param[in] a First UUID to compare.
- * @param[in] b Second UUID to compare.
- */
-bool uuid_equals(const client_uuid_t a, const client_uuid_t b);
-
 #endif  // !UUID_H

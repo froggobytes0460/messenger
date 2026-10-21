@@ -23,7 +23,8 @@ static chat_client_t* find_client(chat_t* chat, int fd) {
 
 static chat_client_t* find_client_by_id(chat_t* chat, client_uuid_t id) {
   for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
-    if (chat->clients[i].active && uuid_equals(chat->clients[i].id, id)) {
+    if (chat->clients[i].active &&
+        memcmp(chat->clients[i].id, id, sizeof(client_uuid_t)) == 0) {
       return &chat->clients[i];
     }
   }

@@ -1,7 +1,6 @@
 #include <server/log.h>
 #include <server/uuid.h>
 #include <stdint.h>
-#include <string.h>
 #include <unistd.h>
 
 #define LOG_TAG "uuid"
@@ -27,8 +26,4 @@ int generate_uuid4(client_uuid_t out) {
       (out[UUID_VARIANT_IDX] & UUID_VAR_MASK) | UUID_VAR_MARKER;
 
   return 0;
-}
-
-bool uuid_equals(const client_uuid_t a, const client_uuid_t b) {
-  return memcmp(a, b, sizeof(client_uuid_t)) == 0;
 }

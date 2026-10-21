@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "server/uuid.h"
 // clang-format on
 
 #define RECOGNIZABLE_UNINIT_VAL 0xAB
@@ -66,14 +67,14 @@ static void test_result_echoes_request(void** state) {
 
   auth_result_t res = run(AUTH_REGISTER, "carol", CAROL_ID);
   uuid_from_int(want, CAROL_ID);
-  assert_true(uuid_equals(res.client_id, want));
+  assert_true(memcmp(res.client_id, want, sizeof(client_uuid_t)) == 0);
   assert_string_equal(res.username, "carol");
 
   // Failed results are addressed too.
   res = run(AUTH_LOGIN, "ghost", GHOST_ID);
   uuid_from_int(want, GHOST_ID);
   assert_int_equal(res.outcome, AUTH_BAD_CREDENTIALS);
-  assert_true(uuid_equals(res.client_id, want));
+  assert_true(memcmp(res.client_id, want, sizeof(client_uuid_t)) == 0);
   assert_string_equal(res.username, "ghost");
 }
 
@@ -106,14 +107,15 @@ static void test_queue_full_and_order(void** state) {
   auth_result_t res;
   for (int i = 0; i < AUTH_QUEUE_CAP; i++) {
     assert_true(auth_collect(&res));
-    assert_true(uuid_equals(res.client_id, uuids[i]));
+    assert_true(memcmp(res.client_id, uuids[i], sizeof(client_uuid_t)) == 0);
   }
   assert_false(auth_collect(&res));
 
   // The ring wraps and is usable again.
   assert_true(auth_submit(&req));
   assert_true(auth_collect(&res));
-  assert_true(uuid_equals(res.client_id, uuids[AUTH_QUEUE_CAP]));
+  assert_true(
+      memcmp(res.client_id, uuids[AUTH_QUEUE_CAP], sizeof(client_uuid_t)) == 0);
 }
 
 int main(void) {
