@@ -14,6 +14,7 @@
  */
 
 #include <server/constants.h>
+#include <server/user_store.h>
 #include <server/uuid.h>
 #include <stdbool.h>
 
@@ -56,11 +57,16 @@ typedef enum {
  * Holds no password.
  */
 typedef struct {
-  auth_outcome_t outcome;  ///< How the request ended
-
+  auth_outcome_t outcome;           ///< How the request ended
   client_uuid_t client_id;          ///< Copied from @ref auth_req_t::client_id
   char username[MAX_USERNAME + 1];  ///< Username from the request
 } auth_result_t;
+
+/**
+ * @brief Borrows Initialized database into internal user table.
+ * @param[in] store An already Initialized database.
+ */
+void auth_init(user_store_t* store);
 
 /**
  * @brief Submits an authentication request.
@@ -71,6 +77,8 @@ typedef struct {
  * @param[in] req The request. Copied; not kept after the call returns.
  * @return true if the request was accepted (a result will follow), false if it
  * was rejected (for example the queue is full) and no result will follow.
+ *
+ * @pre @ref auth_init must be used beforehand to set the internal user store.
  */
 bool auth_submit(const auth_req_t* req);
 

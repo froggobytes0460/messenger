@@ -1,20 +1,15 @@
 #include <server/auth.h>
 #include <server/constants.h>
+#include <server/log.h>
+#include <server/user_store.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
-/**
- * @brief User-record stored by server
- */
-typedef struct {
-  bool used;  ///< Whether the struct holds an actual user or not
-  char username[MAX_USERNAME + 1];  ///< Username
-} user_rec_t;
+#define LOG_TAG "auth"
 
-/// Global-list of users.
-static user_rec_t users[MAX_NUM_USERS];
+static user_store_t* g_user_store;
 
 /// The global-list of results queued for authentication.
 static auth_result_t results[AUTH_QUEUE_CAP];
@@ -23,33 +18,13 @@ static size_t results_head = 0;   ///< Oldest slot; next slot to pop
 static size_t results_tail = 0;   ///< Next slot to write
 static size_t results_count = 0;  ///< results currently stored
 
-/// Finds user from list of users.
-static user_rec_t* find_user(const char* username) {
-  for (size_t i = 0; i < MAX_NUM_USERS; i++) {
-    if (!users[i].used) {
-      continue;
-    }
-    if (strcmp(username, users[i].username) == 0) {
-      return &users[i];
-    }
-  }
-  return NULL;
-}
-
-static user_rec_t* find_free_slot(void) {
-  for (size_t i = 0; i < MAX_NUM_USERS; i++) {
-    if (!users[i].used) {
-      return &users[i];
-    }
-  }
-  return NULL;
-}
-
 static void push_result(const auth_result_t* result) {
   memcpy(&results[results_tail], result, sizeof(*result));
   results_count++;
   results_tail = (results_tail + 1) % AUTH_QUEUE_CAP;
 }
+
+void auth_init(user_store_t* store) { g_user_store = store; }
 
 bool auth_collect(auth_result_t* out) {
   if (results_count == 0) {
@@ -79,32 +54,47 @@ bool auth_submit(const auth_req_t* req) {
 
   switch (req->kind) {
     case AUTH_REGISTER: {
-      if (find_user(req->username) != NULL) {
-        result.outcome = AUTH_NAME_TAKEN;
-        break;
+      switch (user_store_create(g_user_store, req->username, req->password)) {
+        case DB_EXISTS:
+          result.outcome = AUTH_NAME_TAKEN;
+          break;
+        case DB_OK:
+          result.outcome = AUTH_OK;
+          break;
+        case DB_ERROR:
+          result.outcome = AUTH_INTERNAL;
+          break;
+        case DB_NOT_FOUND:
+          // Cannot reach but clang-tidy forces all branches on switch-case
+          // statements
+          log_debug(
+              "reaching `DB_NOT_FOUND` branch in `user_store_create` is "
+              "logically impossible");
+          break;
       }
-      user_rec_t* slot = find_free_slot();
-      if (!slot) {
-        result.outcome = AUTH_INTERNAL;
-        break;
-      }
-      len =
-          snprintf(slot->username, sizeof(slot->username), "%s", req->username);
-      if (len < 0 || len >= (int)sizeof(slot->username)) {
-        result.outcome = AUTH_INTERNAL;
-        break;
-      }
-      slot->used = true;
-      result.outcome = AUTH_OK;
       break;
     }
     case AUTH_LOGIN: {
-      user_rec_t* user = find_user(req->username);
-      if (!user) {
-        result.outcome = AUTH_BAD_CREDENTIALS;
-        break;
+      char pass_hash[USER_HASH_MAX_SIZE];
+      switch (user_store_get_hash(g_user_store, req->username, pass_hash,
+                                  sizeof(pass_hash))) {
+        case DB_NOT_FOUND:
+          result.outcome = AUTH_BAD_CREDENTIALS;
+          break;
+        case DB_OK:
+          result.outcome = AUTH_OK;
+          break;
+        case DB_ERROR:
+          result.outcome = AUTH_INTERNAL;
+          break;
+        case DB_EXISTS:
+          // Cannot reach but clang-tidy forces all branches on switch-case
+          // statements
+          log_debug(
+              "reaching `DB_EXISTS` branch in `user_store_get_hash` is "
+              "logically impossible");
+          break;
       }
-      result.outcome = AUTH_OK;
       break;
     }
     default:

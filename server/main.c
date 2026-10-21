@@ -1,3 +1,4 @@
+#include <server/auth.h>
 #include <server/chat.h>
 #include <server/cli_args.h>
 #include <server/log.h>
@@ -30,6 +31,7 @@ int main(int argc, char* argv[]) {
     log_close();
     return EX_IOERR;
   }
+  auth_init(user_store);
 
   if (cli_args.verbose) {
     log_set_level(LOG_LEVEL_DEBUG);
