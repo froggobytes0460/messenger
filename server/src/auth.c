@@ -65,6 +65,7 @@ bool auth_submit(const auth_req_t* req) {
           result.outcome = AUTH_INTERNAL;
           break;
         case DB_NOT_FOUND:
+          result.outcome = AUTH_INTERNAL;
           // Cannot reach but clang-tidy forces all branches on switch-case
           // statements
           log_debug(
@@ -88,6 +89,7 @@ bool auth_submit(const auth_req_t* req) {
           result.outcome = AUTH_INTERNAL;
           break;
         case DB_EXISTS:
+          result.outcome = AUTH_INTERNAL;
           // Cannot reach but clang-tidy forces all branches on switch-case
           // statements
           log_debug(
