@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sysexits.h>
 #include <unistd.h>
 
 static int parse_long(const char* str, long min, long max, long* out) {
@@ -21,7 +22,7 @@ static int parse_long(const char* str, long min, long max, long* out) {
 
 int parse_args(struct ParsedArgs* args_out, int argc, char* argv[]) {
   if (!args_out) {
-    return EXIT_FAILURE;
+    return EX_USAGE;
   }
 
   // Sensible default values
@@ -42,7 +43,7 @@ int parse_args(struct ParsedArgs* args_out, int argc, char* argv[]) {
         if (parse_long(optarg, 1, USHRT_MAX, &value) != 0) {
           (void)fprintf(stderr, "Error: invalid port '%s' (expected 1-%d)\n",
                         optarg, USHRT_MAX);
-          return EXIT_FAILURE;
+          return EX_USAGE;
         }
         args_out->portNumber = (unsigned short)value;
         break;
@@ -50,7 +51,7 @@ int parse_args(struct ParsedArgs* args_out, int argc, char* argv[]) {
         if (parse_long(optarg, 0, INT_MAX, &value) != 0) {
           (void)fprintf(stderr, "Error: invalid backlog '%s' (expected 0-%d)\n",
                         optarg, INT_MAX);
-          return EXIT_FAILURE;
+          return EX_USAGE;
         }
         args_out->backlog = (unsigned int)value;
         break;
@@ -68,7 +69,7 @@ int parse_args(struct ParsedArgs* args_out, int argc, char* argv[]) {
             stderr,
             "Usage: %s [-p port] [-b backlog] [-l logfile] [-d dbpath] [-v]\n",
             argv[0]);
-        return EXIT_FAILURE;
+        return EX_USAGE;
     }
   }
   // NOLINTEND(misc-include-cleaner)

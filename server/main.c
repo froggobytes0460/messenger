@@ -19,15 +19,16 @@ int main(int argc, char* argv[]) {
     return rc;
   }
 
-  user_store_t* user_store = user_store_open(cli_args.databasePath);
-  if (!user_store) {
-    log_error("Error in opening database %s", cli_args.databasePath);
-    return EX_DATAERR;
-  }
-
   if (cli_args.logFile != NULL && log_open_file(cli_args.logFile) != 0) {
     log_perror(cli_args.logFile);
     return EX_CANTCREAT;
+  }
+
+  user_store_t* user_store = user_store_open(cli_args.databasePath);
+  if (!user_store) {
+    log_error("error in opening database %s", cli_args.databasePath);
+    log_close();
+    return EX_IOERR;
   }
 
   if (cli_args.verbose) {
@@ -41,6 +42,8 @@ int main(int argc, char* argv[]) {
   int listen_fd = -1;
   rc = get_main_socket(cli_args.portNumber, &listen_fd);
   if (rc != 0) {
+    user_store_close(user_store);
+    log_close();
     return rc;
   }
 
