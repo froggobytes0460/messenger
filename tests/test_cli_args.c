@@ -1,6 +1,6 @@
 #include <server/cli_args.h>
 #include <server/constants.h>
-#include <stdlib.h>
+#include <sysexits.h>
 #include <unistd.h>
 
 // clang-format off
@@ -60,7 +60,7 @@ static void test_invalid_port(void** state) {
   (void)state;
   char* argv[] = {"server", "-p", "99999", NULL};
   struct ParsedArgs args;
-  assert_int_equal(parse(&args, dynamic_argc, argv), EXIT_FAILURE);
+  assert_int_equal(parse(&args, dynamic_argc, argv), EX_USAGE);
 }
 
 int main(void) {
