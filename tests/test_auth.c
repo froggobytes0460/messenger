@@ -117,11 +117,15 @@ static void test_queue_full_and_order(void** state) {
 
 static int setup_tests(void** state) {
   *state = user_store_open(":memory:");
+  if (*state == NULL) {
+    return 1;
+  }
   auth_init(*state);
   return 0;
 }
 
 static int teardown_tests(void** state) {
+  auth_init(NULL);  // Refresh the authentication user store
   user_store_close(*state);
   return 0;
 }

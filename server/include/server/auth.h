@@ -65,6 +65,7 @@ typedef struct {
 /**
  * @brief Borrows Initialized database into internal user table.
  * @param[in] store An already Initialized database.
+ * @note Pass `NULL` if wanted to refresh database.
  */
 void auth_init(user_store_t* store);
 
