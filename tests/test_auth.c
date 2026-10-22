@@ -58,6 +58,19 @@ static void test_login_unknown_user(void** state) {
   assert_int_equal(run(AUTH_LOGIN, "nobody", 1).outcome, AUTH_BAD_CREDENTIALS);
 }
 
+static void test_login_other_user_than_registered(void** state) {
+  (void)state;
+  assert_int_equal(run(AUTH_REGISTER, "alice", 1).outcome, AUTH_OK);
+  assert_int_equal(run(AUTH_LOGIN, "bob", 2).outcome, AUTH_BAD_CREDENTIALS);
+}
+
+static void test_no_store_is_internal_error(void** state) {
+  (void)state;
+  auth_init(NULL);  // teardown still closes the real store
+  assert_int_equal(run(AUTH_REGISTER, "alice", 1).outcome, AUTH_INTERNAL);
+  assert_int_equal(run(AUTH_LOGIN, "alice", 1).outcome, AUTH_INTERNAL);
+}
+
 static void test_result_echoes_request(void** state) {
   (void)state;
   client_uuid_t want;
@@ -138,6 +151,8 @@ int main(void) {
       TEST(test_register_then_login),
       TEST(test_register_twice),
       TEST(test_login_unknown_user),
+      TEST(test_login_other_user_than_registered),
+      TEST(test_no_store_is_internal_error),
       TEST(test_result_echoes_request),
       TEST(test_collect_empty_leaves_out_untouched),
       TEST(test_queue_full_and_order),
