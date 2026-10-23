@@ -10,6 +10,9 @@
 
 #define LOG_TAG "auth"
 
+/// The dummy hash to use when the user is non-existant
+static char dummy_hash[crypto_pwhash_STRBYTES];
+
 static user_store_t* g_user_store;  ///< Borrowed; the caller closes it.
 
 /// Requests accepted by @ref auth_submit and not yet processed (FIFO ring).
@@ -46,7 +49,15 @@ static void push_result(const auth_result_t* result) {
 }
 
 static auth_outcome_t register_user(const auth_req_t* req) {
-  switch (user_store_create(g_user_store, req->username, req->password)) {
+  char hash[crypto_pwhash_STRBYTES];
+  if (crypto_pwhash_str(hash, req->password, strlen(req->password),
+                        crypto_pwhash_OPSLIMIT_INTERACTIVE,
+                        crypto_pwhash_MEMLIMIT_INTERACTIVE) != 0) {
+    log_error("password hash generation failed (out of memory).");
+    return AUTH_INTERNAL;
+  }
+
+  switch (user_store_create(g_user_store, req->username, hash)) {
     case DB_OK:
       return AUTH_OK;
     case DB_EXISTS:
@@ -67,11 +78,19 @@ static auth_outcome_t login_user(const auth_req_t* req) {
   switch (user_store_get_hash(g_user_store, req->username, pass_hash,
                               sizeof(pass_hash))) {
     case DB_OK:
-      outcome = AUTH_OK;
+      outcome = crypto_pwhash_str_verify(pass_hash, req->password,
+                                         strlen(req->password)) == 0
+                    ? AUTH_OK
+                    : AUTH_BAD_CREDENTIALS;
       break;
-    case DB_NOT_FOUND:
+    case DB_NOT_FOUND: {
+      // Does the time taking verification even on unkown users to avoid
+      // revealing usernames.
+      const int ignored = crypto_pwhash_str_verify(dummy_hash, req->password,
+                                                   strlen(req->password));
+      (void)ignored;
       outcome = AUTH_BAD_CREDENTIALS;
-      break;
+    } break;
     case DB_ERROR:
       break;
     case DB_EXISTS:
@@ -79,7 +98,6 @@ static auth_outcome_t login_user(const auth_req_t* req) {
       log_debug("DB_EXISTS from `user_store_get_hash` is impossible");
       break;
   }
-  // Until hashing exists the stored value is the plaintext password.
   auth_wipe(pass_hash, sizeof(pass_hash));
   return outcome;
 }
@@ -121,6 +139,12 @@ void auth_init(user_store_t* store) {
   auth_wipe(results, sizeof(results));
   requests_head = requests_tail = requests_count = 0;
   results_head = results_tail = results_count = 0;
+  if (store &&
+      crypto_pwhash_str(dummy_hash, "DUMMY-PASSWORD", strlen("DUMMY-PASSWORD"),
+                        crypto_pwhash_OPSLIMIT_INTERACTIVE,
+                        crypto_pwhash_MEMLIMIT_INTERACTIVE) != 0) {
+    log_error("dummy password hash generation failed");
+  }
 }
 
 bool auth_submit(const auth_req_t* req) {
