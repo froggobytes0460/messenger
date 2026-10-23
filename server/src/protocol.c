@@ -43,7 +43,7 @@ static bool validate_line(const char* str, size_t len) {
 /// 0-9), with exceptions of '-' and '_'.
 static bool validate_username(const char* username, size_t len) {
   for (size_t i = 0; i < len; i++) {
-    unsigned char c = username[i];
+    unsigned char c = (unsigned char)username[i];
     if (c == '-' || c == '_') {
       continue;
     }

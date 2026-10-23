@@ -225,7 +225,7 @@ static void dispatch_events(poll_mgr_t* mgr, char* buf, size_t buf_size,
                             const poll_callback_t* callbacks) {
   size_t i = 0;
   while (i < mgr->nfds) {
-    unsigned short revents = mgr->fds[i].revents;
+    unsigned short revents = (unsigned short)mgr->fds[i].revents;
 
     if (mgr->fds[i].fd == mgr->listen_fd) {
       if (revents & POLLIN) {

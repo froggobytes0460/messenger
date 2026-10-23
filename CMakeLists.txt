@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.28)
 project(Messenger LANGUAGES C)
 
 add_library(compiler_flags INTERFACE)
-target_compile_options(compiler_flags INTERFACE -Wall -Wextra -Wpedantic)
+target_compile_options(compiler_flags INTERFACE -Wall -Wextra -Wpedantic -Wconversion
+                           -Wsign-conversion)
 
 find_package(SQLite3 REQUIRED) # Arch package: sqlite
 

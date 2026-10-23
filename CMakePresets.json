@@ -29,6 +29,17 @@
       }
     },
     {
+      "name": "asan",
+      "inherits": "_base",
+      "description": "Debug build with AddressSanitizer and UndefinedBehaviorSanitizer.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS_DEBUG": "-O0 -ggdb",
+        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
+    },
+    {
       "name": "release",
       "inherits": "_base",
       "description": "Preset for release builds.",
@@ -45,6 +56,11 @@
       "description": "Build the debug configuration."
     },
     {
+      "name": "asan",
+      "configurePreset": "asan",
+      "description": "Build with sanitizers."
+    },
+    {
       "name": "release",
       "configurePreset": "release",
       "description": "Build the release configuration."
@@ -55,6 +71,14 @@
       "name": "debug",
       "configurePreset": "debug",
       "description": "Run the tests against the debug build.",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "description": "Run the tests under sanitizers.",
       "output": {
         "outputOnFailure": true
       }
