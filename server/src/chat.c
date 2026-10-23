@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 
 #define LOG_TAG "chat"
@@ -35,7 +36,7 @@ static chat_client_t* find_client_by_name(chat_t* chat, const char* name) {
   for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
     if (chat->clients[i].active &&
         chat->clients[i].state == CLIENT_AUTHENTICATED &&
-        strcmp(name, chat->clients[i].name) == 0) {
+        strcasecmp(name, chat->clients[i].name) == 0) {
       return &chat->clients[i];
     }
   }
@@ -141,6 +142,18 @@ static void quit_client(int client_fd, poll_mgr_t* mgr) {
   poll_mgr_close(mgr, client_fd);
 }
 
+// A refused login counts as a failed attempt; the last one disconnects.
+static void reject_attempt(chat_client_t* client, poll_mgr_t* mgr,
+                           const char* reason) {
+  if (++client->failures >= MAX_AUTH_ATTEMPTS) {
+    send_err(mgr, client->fd, "too many failed attempts");
+    poll_mgr_close(mgr, client->fd);
+    return;
+  }
+  send_err(mgr, client->fd, reason);
+  client->state = CLIENT_CONNECTED;
+}
+
 static void drain_auth_results(chat_t* chat, poll_mgr_t* mgr) {
   auth_result_t res;
   while (auth_collect(&res)) {
@@ -152,8 +165,7 @@ static void drain_auth_results(chat_t* chat, poll_mgr_t* mgr) {
     switch (res.outcome) {
       case AUTH_OK: {
         if (find_client_by_name(chat, res.username)) {
-          send_err(mgr, client->fd, "already logged in");
-          client->state = CLIENT_CONNECTED;
+          reject_attempt(client, mgr, "already logged in");
           continue;
         }
         client->state = CLIENT_AUTHENTICATED;
@@ -163,13 +175,7 @@ static void drain_auth_results(chat_t* chat, poll_mgr_t* mgr) {
         break;
       }
       case AUTH_BAD_CREDENTIALS:
-        if (++client->failures >= MAX_AUTH_ATTEMPTS) {
-          send_err(mgr, client->fd, "too many failed attempts");
-          poll_mgr_close(mgr, client->fd);
-          continue;
-        }
-        send_err(mgr, client->fd, "bad credentials");
-        client->state = CLIENT_CONNECTED;
+        reject_attempt(client, mgr, "bad credentials");
         break;
       case AUTH_NAME_TAKEN:
         send_err(mgr, client->fd, "name taken");
