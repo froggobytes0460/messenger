@@ -66,9 +66,18 @@ int poll_mgr_init(poll_mgr_t* mgr, int listen_fd);
  * @param[in,out] mgr Initialized poll manager.
  * @param[in] callbacks Handlers invoked on connection, disconnection, message
  * and tick, plus the context pointer passed to them.
- * @return Only returns, with a non-zero exit code, on failure.
+ * @return 0 after @ref poll_mgr_request_stop was called, otherwise a non-zero
+ * exit code on failure.
  */
 int poll_mgr_run(poll_mgr_t* mgr, poll_callback_t callbacks);
+
+/**
+ * @brief Asks @ref poll_mgr_run to return after its current iteration.
+ *
+ * Async-signal-safe: call it from a SIGINT/SIGTERM handler installed without
+ * SA_RESTART so the blocked poll() wakes up with EINTR.
+ */
+void poll_mgr_request_stop(void);
 
 /**
  * @brief Sends a message to client, adhering to buffer queues.

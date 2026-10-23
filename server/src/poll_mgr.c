@@ -4,6 +4,7 @@
 #include <server/constants.h>
 #include <server/log.h>
 #include <server/poll_mgr.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -15,6 +16,9 @@
 #include <unistd.h>
 
 #define LOG_TAG "poll_mgr"
+
+/// Set from a signal handler by poll_mgr_request_stop().
+static volatile sig_atomic_t stop_requested = 0;
 
 #define HOST_STR_LEN 1025
 #define SERV_STR_LEN 32
@@ -287,10 +291,12 @@ int poll_mgr_init(poll_mgr_t* mgr, int listen_fd) {
   return 0;
 }
 
+void poll_mgr_request_stop(void) { stop_requested = 1; }
+
 int poll_mgr_run(poll_mgr_t* mgr, poll_callback_t callbacks) {
   char buf[BUFFER_SIZE];
 
-  while (1) {
+  while (!stop_requested) {
     int rc = poll(mgr->fds, mgr->nfds, POLL_TICK_MS);
     if (rc == -1) {
       if (errno == EINTR) {
@@ -311,6 +317,7 @@ int poll_mgr_run(poll_mgr_t* mgr, poll_callback_t callbacks) {
 
     sweep_closed(mgr, &callbacks);
   }
+  return 0;
 }
 
 int poll_mgr_send(poll_mgr_t* mgr, int fd, const char* buf, size_t len) {

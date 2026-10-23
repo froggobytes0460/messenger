@@ -5,11 +5,34 @@
 #include <server/main_socket.h>
 #include <server/poll_mgr.h>
 #include <server/user_store.h>
+#include <signal.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sysexits.h>
 #include <unistd.h>
 
 #define LOG_TAG "main"
+
+/// Large (about 1.7 MB each), so kept off the stack.
+static poll_mgr_t mgr;
+static chat_t chat;
+
+static void handle_stop_signal(int signo) {
+  (void)signo;
+  poll_mgr_request_stop();
+}
+
+/// Installs SIGINT/SIGTERM handlers without SA_RESTART so poll() wakes up.
+static int install_stop_handlers(void) {
+  struct sigaction action;
+  memset(&action, 0, sizeof(action));
+  action.sa_handler = handle_stop_signal;
+  sigemptyset(&action.sa_mask);
+  return sigaction(SIGINT, &action, NULL) == 0 &&
+                 sigaction(SIGTERM, &action, NULL) == 0
+             ? 0
+             : -1;
+}
 
 int main(int argc, char* argv[]) {
   // NOLINTNEXTLINE(readability-implicit-bool-conversion)
@@ -25,6 +48,11 @@ int main(int argc, char* argv[]) {
     return EX_CANTCREAT;
   }
 
+  if (cli_args.verbose) {
+    log_set_level(LOG_LEVEL_DEBUG);
+    log_info("Verbosity set to true.");
+  }
+
   user_store_t* user_store = user_store_open(cli_args.databasePath);
   if (!user_store) {
     log_error("error in opening database %s", cli_args.databasePath);
@@ -33,11 +61,6 @@ int main(int argc, char* argv[]) {
   }
   log_info("Using database in path \"%s\"", cli_args.databasePath);
   auth_init(user_store);
-
-  if (cli_args.verbose) {
-    log_set_level(LOG_LEVEL_DEBUG);
-    log_info("Verbosity set to true.");
-  }
 
   log_info("initializing, port %hu, backlog %u", cli_args.portNumber,
            cli_args.backlog);
@@ -56,17 +79,22 @@ int main(int argc, char* argv[]) {
     goto cleanup_and_exit;
   }
 
-  poll_mgr_t mgr;
+  if (install_stop_handlers() != 0) {
+    log_perror("sigaction");
+    rc = EX_OSERR;
+    goto cleanup_and_exit;
+  }
+
   rc = poll_mgr_init(&mgr, listen_fd);
   if (rc != 0) {
     rc = EX_OSERR;
     goto cleanup_and_exit;
   }
 
-  chat_t chat;
   chat_init(&chat);
 
   rc = poll_mgr_run(&mgr, chat_callbacks(&chat));
+  log_info("shutting down");
 
 cleanup_and_exit:
   close(listen_fd);
