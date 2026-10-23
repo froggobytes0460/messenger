@@ -18,6 +18,7 @@ int log_open_file(const char* path) {
   if (!file) {
     return -1;
   }
+  log_close();  // Do not leak a previously opened file.
   log_file = file;
   return 0;
 }
