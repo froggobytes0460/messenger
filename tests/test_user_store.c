@@ -1,5 +1,9 @@
 #include <server/constants.h>
 #include <server/user_store.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 // clang-format off
 #include <cmocka.h>
@@ -133,6 +137,60 @@ static void test_injection_like_username(void** state) {
   assert_string_equal(hash, "hash1");
 }
 
+static void test_usernames_are_case_insensitive(void** state) {
+  user_store_t* store = *state;
+  assert_int_equal(user_store_create(store, "Alice", "hash1"), DB_OK);
+  assert_int_equal(user_store_create(store, "alice", "hash2"), DB_EXISTS);
+  assert_int_equal(user_store_create(store, "ALICE", "hash3"), DB_EXISTS);
+  char hash[USER_HASH_MAX_SIZE];
+  assert_int_equal(user_store_get_hash(store, "aLiCe", hash, sizeof(hash)),
+                   DB_OK);
+  assert_string_equal(hash, "hash1");
+}
+
+static void test_hash_buffer_boundary(void** state) {
+  user_store_t* store = *state;
+  assert_int_equal(user_store_create(store, "alice", "12345"), DB_OK);
+  char hash[8];
+  memset(hash, 'x', sizeof(hash));
+  // 5 chars + NUL needs a buffer of 6: exactly that fits, one less does not.
+  assert_int_equal(user_store_get_hash(store, "alice", hash, 6), DB_OK);
+  assert_string_equal(hash, "12345");
+  memset(hash, 'x', sizeof(hash));
+  assert_int_equal(user_store_get_hash(store, "alice", hash, 5), DB_ERROR);
+  assert_int_equal(hash[0], 'x');  // untouched on failure
+}
+
+/// A file database keeps its users after it is closed and opened again.
+static void test_file_database_persists(void** state) {
+  (void)state;
+  char path[] = "/tmp/messenger_test_XXXXXX";
+  int fd = mkstemp(path);
+  assert_true(fd != -1);
+  close(fd);
+
+  user_store_t* store = user_store_open(path);
+  assert_non_null(store);
+  assert_int_equal(user_store_create(store, "alice", "hash1"), DB_OK);
+  user_store_close(store);
+
+  store = user_store_open(path);  // IF NOT EXISTS must keep the table
+  assert_non_null(store);
+  char hash[USER_HASH_MAX_SIZE];
+  assert_int_equal(user_store_get_hash(store, "alice", hash, sizeof(hash)),
+                   DB_OK);
+  assert_string_equal(hash, "hash1");
+  assert_int_equal(user_store_create(store, "alice", "hash2"), DB_EXISTS);
+  user_store_close(store);
+
+  char wal[sizeof(path) + 8];
+  unlink(path);
+  (void)snprintf(wal, sizeof(wal), "%s-wal", path);
+  unlink(wal);
+  (void)snprintf(wal, sizeof(wal), "%s-shm", path);
+  unlink(wal);
+}
+
 int main(void) {
   const struct CMUnitTest tests[] = {
       cmocka_unit_test(test_open_user_store_memory),
@@ -159,6 +217,13 @@ int main(void) {
       cmocka_unit_test_setup_teardown(test_injection_like_username,
                                       setup_init_memory_db,
                                       teardown_free_memory_db),
+      cmocka_unit_test_setup_teardown(test_usernames_are_case_insensitive,
+                                      setup_init_memory_db,
+                                      teardown_free_memory_db),
+      cmocka_unit_test_setup_teardown(test_hash_buffer_boundary,
+                                      setup_init_memory_db,
+                                      teardown_free_memory_db),
+      cmocka_unit_test(test_file_database_persists),
   };
   return cmocka_run_group_tests(tests, NULL, NULL);
 }

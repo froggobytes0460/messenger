@@ -1,4 +1,4 @@
 .cache/
 compile_commands.json
 build/
-messenger.db
+messenger.db*

@@ -6,11 +6,13 @@
 
 #define LOG_TAG "user_store"
 
+#define BUSY_TIMEOUT_MS 5000  ///< How long a locked database is retried.
+
 /// The schema for database.
 static const char SCHEMA[] =
     "CREATE TABLE IF NOT EXISTS users ("
     "  id         INTEGER PRIMARY KEY,"
-    "  username   TEXT NOT NULL UNIQUE,"
+    "  username   TEXT NOT NULL UNIQUE COLLATE NOCASE,"
     "  pass_hash  TEXT NOT NULL,"
     "  created_at INTEGER NOT NULL DEFAULT (unixepoch())"
     ");";
@@ -48,11 +50,18 @@ user_store_t* user_store_open(const char* path) {
     sqlite3_free(sql_err);
     goto failure_cleanup;
   }
+  // Wait for a competing writer instead of failing at once, and let readers
+  // proceed during writes. (WAL is ignored by in-memory databases.)
+  sqlite3_busy_timeout(s->db, BUSY_TIMEOUT_MS);
+  if (sqlite3_exec(s->db, "PRAGMA journal_mode=WAL;", NULL, NULL, NULL) !=
+      SQLITE_OK) {
+    log_warn("could not enable WAL: %s", sqlite3_errmsg(s->db));
+  }
   return s;
 
 failure_cleanup:
   if (s->db) {
-    sqlite3_close(s->db);
+    sqlite3_close_v2(s->db);
   }
   free(s);
   return NULL;
@@ -62,7 +71,7 @@ void user_store_close(user_store_t* store) {
   if (!store) {
     return;
   }
-  sqlite3_close(store->db);
+  sqlite3_close_v2(store->db);
   free(store);
 }
 
@@ -85,8 +94,7 @@ database_result_t user_store_create(user_store_t* store, const char* username,
     result = DB_OK;
     goto cleanup;
   }
-  if (rc == SQLITE_CONSTRAINT &&
-      sqlite3_extended_errcode(store->db) == SQLITE_CONSTRAINT_UNIQUE) {
+  if (sqlite3_extended_errcode(store->db) == SQLITE_CONSTRAINT_UNIQUE) {
     result = DB_EXISTS;
     goto cleanup;
   }
