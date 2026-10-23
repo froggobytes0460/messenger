@@ -68,7 +68,80 @@ static void test_no_store_is_internal_error(void** state) {
   (void)state;
   auth_init(NULL);  // teardown still closes the real store
   assert_int_equal(run(AUTH_REGISTER, "alice", 1).outcome, AUTH_INTERNAL);
-  assert_int_equal(run(AUTH_LOGIN, "alice", 1).outcome, AUTH_INTERNAL);
+  auth_result_t res = run(AUTH_LOGIN, "alice", 7);
+  assert_int_equal(res.outcome, AUTH_INTERNAL);
+  // Even a failed request is addressed to its client.
+  client_uuid_t want;
+  uuid_from_int(want, 7);
+  assert_memory_equal(res.client_id, want, sizeof(client_uuid_t));
+  assert_string_equal(res.username, "alice");
+}
+
+static void test_max_length_username(void** state) {
+  (void)state;
+  char name[MAX_USERNAME + 1];
+  memset(name, 'a', MAX_USERNAME);
+  name[MAX_USERNAME] = '\0';
+  assert_int_equal(run(AUTH_REGISTER, name, 1).outcome, AUTH_OK);
+  auth_result_t res = run(AUTH_LOGIN, name, 2);
+  assert_int_equal(res.outcome, AUTH_OK);
+  assert_string_equal(res.username, name);
+}
+
+static void test_unterminated_fields_rejected(void** state) {
+  (void)state;
+  auth_result_t res;
+
+  auth_req_t req = make_req(AUTH_REGISTER, "alice", 1);
+  memset(req.username, 'a', sizeof(req.username));  // no NUL
+  assert_false(auth_submit(&req));
+
+  req = make_req(AUTH_REGISTER, "alice", 1);
+  memset(req.password, 'p', sizeof(req.password));  // no NUL
+  assert_false(auth_submit(&req));
+
+  // Rejected requests leave nothing behind and register nobody.
+  assert_false(auth_collect(&res));
+  assert_int_equal(run(AUTH_LOGIN, "alice", 2).outcome, AUTH_BAD_CREDENTIALS);
+}
+
+static void test_unknown_kind_is_internal_error(void** state) {
+  (void)state;
+  auth_req_t req = make_req((auth_kind_t)99, "alice", 3);
+  assert_true(auth_submit(&req));  // accepted, so exactly one result follows
+  auth_result_t res;
+  assert_true(auth_collect(&res));
+  assert_int_equal(res.outcome, AUTH_INTERNAL);
+  assert_false(auth_collect(&res));
+}
+
+/// The ring wraps while results are still queued and stays in order.
+static void test_ring_wraps_with_queued_results(void** state) {
+  (void)state;
+  enum { TAKEN = 10 };
+  auth_req_t req = make_req(AUTH_LOGIN, "nobody", 0);
+  auth_result_t res;
+
+  for (uint32_t i = 0; i < AUTH_QUEUE_CAP; i++) {
+    uuid_from_int(req.client_id, i);
+    assert_true(auth_submit(&req));
+  }
+  for (uint32_t i = 0; i < TAKEN; i++) {
+    assert_true(auth_collect(&res));
+  }
+  for (uint32_t i = 0; i < TAKEN; i++) {  // refill the freed slots
+    uuid_from_int(req.client_id, AUTH_QUEUE_CAP + i);
+    assert_true(auth_submit(&req));
+  }
+  assert_false(auth_submit(&req));  // full again
+
+  for (uint32_t i = TAKEN; i < AUTH_QUEUE_CAP + TAKEN; i++) {
+    client_uuid_t want;
+    uuid_from_int(want, i);
+    assert_true(auth_collect(&res));
+    assert_memory_equal(res.client_id, want, sizeof(client_uuid_t));
+  }
+  assert_false(auth_collect(&res));
 }
 
 static void test_result_echoes_request(void** state) {
@@ -153,6 +226,10 @@ int main(void) {
       TEST(test_login_unknown_user),
       TEST(test_login_other_user_than_registered),
       TEST(test_no_store_is_internal_error),
+      TEST(test_max_length_username),
+      TEST(test_unterminated_fields_rejected),
+      TEST(test_unknown_kind_is_internal_error),
+      TEST(test_ring_wraps_with_queued_results),
       TEST(test_result_echoes_request),
       TEST(test_collect_empty_leaves_out_untouched),
       TEST(test_queue_full_and_order),
