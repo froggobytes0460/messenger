@@ -1,7 +1,6 @@
 #ifndef UUID_H
 #define UUID_H
 
-#include <stdbool.h>
 #include <stdint.h>
 
 /**
@@ -9,8 +8,9 @@
  * @brief Handles UUIDs (UUIDv4)
  */
 
-#define UUID_LEN_BYTES 16
+#define UUID_LEN_BYTES 16  ///< Size of a UUID in bytes.
 
+/// A UUID. An array type, so copy it with memcpy rather than `=`.
 typedef uint8_t client_uuid_t[UUID_LEN_BYTES];
 
 /**

@@ -7,8 +7,8 @@
  *
  * The caller never learns the outcome from @ref auth_submit. It calls
  * @ref auth_collect later (for example on every tick) and gets one
- * @ref auth_result_t per accepted request. How the check is done (in memory,
- * SQLite, a worker thread) is hidden behind this interface.
+ * @ref auth_result_t per accepted request. How the check is done (inline in the
+ * calling thread today, a worker thread later) is hidden behind this interface.
  *
  * @warning An @ref auth_req_t holds a plaintext password. Never log it.
  */
@@ -63,17 +63,27 @@ typedef struct {
 } auth_result_t;
 
 /**
- * @brief Borrows Initialized database into internal user table.
- * @param[in] store An already Initialized database.
- * @note Pass `NULL` if wanted to refresh database.
+ * @brief Sets the user store used for registration and login.
+ *
+ * The store is borrowed, not owned: the caller keeps it open while it is set
+ * and closes it afterwards. Any queued requests and results are discarded.
+ *
+ * @param[in] store An already opened user store, or `NULL` to detach the
+ * current one (requests then end as @ref AUTH_INTERNAL).
  */
 void auth_init(user_store_t* store);
 
 /**
  * @brief Submits an authentication request.
  *
- * Returns immediately; the outcome is delivered later through
- * @ref auth_collect. Every request accepted here produces exactly one result.
+ * The outcome is delivered through @ref auth_collect, never by this call.
+ * Today the check runs inside this call, so the result is already waiting; do
+ * not rely on that, since a worker thread may take over later. Every request
+ * accepted here produces exactly one result.
+ *
+ * Results stay queued until collected. Once @ref AUTH_QUEUE_CAP requests are
+ * pending or uncollected, further submits return false, so call
+ * @ref auth_collect regularly (for example on every tick).
  *
  * @param[in] req The request. Copied; not kept after the call returns.
  * @return true if the request was accepted (a result will follow), false if it
