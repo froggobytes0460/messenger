@@ -31,6 +31,7 @@ int main(int argc, char* argv[]) {
     log_close();
     return EX_IOERR;
   }
+  log_info("Using database in path \"%s\"", cli_args.databasePath);
   auth_init(user_store);
 
   if (cli_args.verbose) {
