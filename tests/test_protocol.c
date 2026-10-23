@@ -189,7 +189,7 @@ static void test_rejected_lines(void** state) {
   for (size_t i = 0; i < sizeof(bad_cases) / sizeof(bad_case_t); i++) {
     print_message("case: %s\n", bad_cases[i].case_name);
     protocol_cmd_t cmd;
-    int rc =
+    proto_status_t rc =
         parse_protocol_str(bad_cases[i].line, strlen(bad_cases[i].line), &cmd);
     assert_int_equal(rc, bad_cases[i].rc);
   }
@@ -201,8 +201,8 @@ static void test_expected_lines(void** state) {
        i++) {
     print_message("case: %s\n", expected_cases[i].case_name);
     protocol_cmd_t cmd;
-    int rc = parse_protocol_str(expected_cases[i].line,
-                                strlen(expected_cases[i].line), &cmd);
+    proto_status_t rc = parse_protocol_str(
+        expected_cases[i].line, strlen(expected_cases[i].line), &cmd);
     assert_int_equal(rc, PROTO_OK);
     assert_cmd_equal(&cmd, expected_cases[i].expected);
   }
