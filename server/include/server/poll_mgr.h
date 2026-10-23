@@ -43,7 +43,9 @@ typedef struct {
   void (*on_disconnection)(void* ctx, poll_mgr_t* mgr, int client_fd);
   /// Called after a new client was accepted as @p client_fd.
   void (*on_connection)(void* ctx, poll_mgr_t* mgr, int client_fd);
-  /// Called with @p len bytes in @p buf (not NUL-terminated) from @p sender_fd.
+  /// Called with @p len bytes in @p buf from @p sender_fd. The bytes are
+  /// followed by a NUL for convenience, but may contain NULs themselves; the
+  /// buffer is shared and only valid during the call.
   void (*on_message)(void* ctx, poll_mgr_t* mgr, int sender_fd, const char* buf,
                      size_t len);
   /// Called after every `poll()` return, including timeouts with no events.
@@ -62,8 +64,8 @@ int poll_mgr_init(poll_mgr_t* mgr, int listen_fd);
 /**
  * @brief Runs the event loop.
  * @param[in,out] mgr Initialized poll manager.
- * @param[in] callbacks Handlers invoked on connection, disconnection and
- * message, plus the context pointer passed to them.
+ * @param[in] callbacks Handlers invoked on connection, disconnection, message
+ * and tick, plus the context pointer passed to them.
  * @return Only returns, with a non-zero exit code, on failure.
  */
 int poll_mgr_run(poll_mgr_t* mgr, poll_callback_t callbacks);

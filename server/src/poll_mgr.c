@@ -20,11 +20,12 @@
 #define SERV_STR_LEN 32
 
 static int set_fd_nonblocking(int fd) {
-  unsigned fd_flags = fcntl(fd, F_GETFL, 0);
-  if ((int)fd_flags == -1) {
+  int fd_flags = fcntl(fd, F_GETFL, 0);
+  if (fd_flags == -1) {
     log_perror("fcntl F_GETFL");
     return -1;
   }
+  // NOLINTNEXTLINE(bugprone-signed-bitwise)
   fd_flags |= O_NONBLOCK;
   if (fcntl(fd, F_SETFL, fd_flags) == -1) {
     log_perror("fcntl F_SETFL");
@@ -116,6 +117,15 @@ static void handle_new_connection(poll_mgr_t* mgr,
       return;
     }
     log_perror("accept");
+    // NOLINTBEGIN(misc-include-cleaner)
+    bool out_of_resources = errno == EMFILE || errno == ENFILE ||
+                            errno == ENOBUFS || errno == ENOMEM;
+    // NOLINTEND(misc-include-cleaner)
+    if (out_of_resources) {
+      // The pending connection stays queued, so the listening socket would
+      // stay readable and spin the loop. Stop polling it until the next wake.
+      mgr->fds[0].events = 0;
+    }
     return;
   }
 
@@ -127,6 +137,7 @@ static void handle_new_connection(poll_mgr_t* mgr,
   if (mgr->nfds < MAX_CONNECTIONS + 1) {
     mgr->fds[mgr->nfds].fd = client_fd;
     mgr->fds[mgr->nfds].events = POLLIN;
+    mgr->fds[mgr->nfds].revents = 0;
     mgr->out[mgr->nfds].len = 0;
     mgr->closing[mgr->nfds] = false;
     mgr->nfds++;
@@ -223,6 +234,14 @@ static void dispatch_events(poll_mgr_t* mgr, char* buf, size_t buf_size,
       i++;
       continue;
     }
+    if (revents & POLLNVAL) {
+      // The fd is not open (closed behind our back): poll() would report it
+      // on every call, so drop the client.
+      log_error("poll reported an invalid fd %d", mgr->fds[i].fd);
+      mgr->closing[i] = true;
+      i++;
+      continue;
+    }
 
     // Handlers only flag clients for closing; nothing is swapped until
     // sweep_closed(), so always advance. Skip reading if the write failed.
@@ -237,9 +256,19 @@ static void dispatch_events(poll_mgr_t* mgr, char* buf, size_t buf_size,
   }
 }
 
+/// One last non-blocking attempt to deliver replies queued before the close
+/// (for example "ERR too many failed attempts"). Whatever does not fit is lost.
+static void flush_before_close(poll_mgr_t* mgr, size_t index) {
+  outbuf_t* out = &mgr->out[index];
+  if (out->len > 0) {
+    (void)try_send(mgr->fds[index].fd, out->data, out->len);
+  }
+}
+
 static void sweep_closed(poll_mgr_t* mgr, const poll_callback_t* callbacks) {
   for (size_t i = mgr->nfds - 1; i >= 1; i--) {
     if (mgr->closing[i]) {
+      flush_before_close(mgr, i);
       remove_client(mgr, i, callbacks);
     }
   }
@@ -270,6 +299,7 @@ int poll_mgr_run(poll_mgr_t* mgr, poll_callback_t callbacks) {
       log_perror("poll");
       return EX_OSERR;
     }
+    mgr->fds[0].events = POLLIN;  // Resume accepting if accept() paused it.
 
     if (rc > 0) {
       dispatch_events(mgr, buf, sizeof(buf), &callbacks);
