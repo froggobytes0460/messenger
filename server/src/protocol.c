@@ -194,7 +194,7 @@ proto_status_t parse_protocol_str(const char* line, size_t len,
   proto_status_t rc = parse_line(line, len, out);
   if (rc != PROTO_OK) {
     // A failed parse may hold a partial username or password.
-    memset(out, 0, sizeof(*out));
+    explicit_bzero(out, sizeof(*out));  // may hold a half-parsed password
   }
   return rc;
 }

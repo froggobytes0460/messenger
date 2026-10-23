@@ -32,7 +32,7 @@ static void push_request(const auth_req_t* req) {
 /// password). The caller must check that the queue is not empty.
 static void pop_request(auth_req_t* out) {
   memcpy(out, &requests[requests_head], sizeof(*out));
-  memset(&requests[requests_head], 0, sizeof(requests[requests_head]));
+  explicit_bzero(&requests[requests_head], sizeof(requests[requests_head]));
   requests_head = (requests_head + 1) % AUTH_QUEUE_CAP;
   requests_count--;
 }
@@ -61,20 +61,25 @@ static auth_outcome_t register_user(const auth_req_t* req) {
 
 static auth_outcome_t login_user(const auth_req_t* req) {
   char pass_hash[USER_HASH_MAX_SIZE];
+  auth_outcome_t outcome = AUTH_INTERNAL;
   switch (user_store_get_hash(g_user_store, req->username, pass_hash,
                               sizeof(pass_hash))) {
     case DB_OK:
-      return AUTH_OK;
+      outcome = AUTH_OK;
+      break;
     case DB_NOT_FOUND:
-      return AUTH_BAD_CREDENTIALS;
+      outcome = AUTH_BAD_CREDENTIALS;
+      break;
     case DB_ERROR:
-      return AUTH_INTERNAL;
+      break;
     case DB_EXISTS:
       // Cannot reach, but clang-tidy requires every enum value in a switch.
       log_debug("DB_EXISTS from `user_store_get_hash` is impossible");
-      return AUTH_INTERNAL;
+      break;
   }
-  return AUTH_INTERNAL;
+  // Until hashing exists the stored value is the plaintext password.
+  explicit_bzero(pass_hash, sizeof(pass_hash));
+  return outcome;
 }
 
 static void process_request(const auth_req_t* req, auth_result_t* out) {
@@ -101,13 +106,15 @@ static void run_pending(void) {
     auth_result_t result;
     pop_request(&req);
     process_request(&req, &result);
-    memset(&req, 0, sizeof(req));  // holds a password
+    explicit_bzero(&req, sizeof(req));  // holds a password
     push_result(&result);
   }
 }
 
 void auth_init(user_store_t* store) {
   g_user_store = store;
+  explicit_bzero(requests, sizeof(requests));  // may still hold passwords
+  explicit_bzero(results, sizeof(results));
   requests_head = requests_tail = requests_count = 0;
   results_head = results_tail = results_count = 0;
 }
