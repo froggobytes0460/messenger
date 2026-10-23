@@ -2,10 +2,15 @@ cmake_minimum_required(VERSION 3.28)
 project(Messenger LANGUAGES C)
 
 add_library(compiler_flags INTERFACE)
-target_compile_options(compiler_flags INTERFACE -Wall -Wextra -Wpedantic -Wconversion
-                           -Wsign-conversion)
+target_compile_options(compiler_flags INTERFACE -Wall -Wextra -Wpedantic
+                                                -Wconversion -Wsign-conversion)
 
 find_package(SQLite3 REQUIRED) # Arch package: sqlite
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(
+  LIBSODIUM REQUIRED IMPORTED_TARGET libsodium
+) # Arch package: libsodium
 
 add_subdirectory(client/)
 add_subdirectory(server/)
@@ -25,7 +30,7 @@ if(DOXYGEN_FOUND)
   set(DOXYGEN_WARN_IF_UNDOCUMENTED YES)
   set(DOXYGEN_USE_MDFILE_AS_MAINPAGE ${CMAKE_SOURCE_DIR}/README.md)
   set(DOXYGEN_GENERATE_LATEX NO)
-  doxygen_add_docs(docs 
+  doxygen_add_docs(docs
     server/include server/src server/main.c client/ README.md
     COMMENT "Generating API documentation")
 endif()
