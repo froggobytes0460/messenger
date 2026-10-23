@@ -105,6 +105,13 @@ static void test_unterminated_fields_rejected(void** state) {
   assert_int_equal(run(AUTH_LOGIN, "alice", 2).outcome, AUTH_BAD_CREDENTIALS);
 }
 
+static void test_null_request_rejected(void** state) {
+  (void)state;
+  assert_false(auth_submit(NULL));
+  auth_result_t res;
+  assert_false(auth_collect(&res));
+}
+
 static void test_unknown_kind_is_internal_error(void** state) {
   (void)state;
   auth_req_t req = make_req((auth_kind_t)99, "alice", 3);
@@ -228,6 +235,7 @@ int main(void) {
       TEST(test_no_store_is_internal_error),
       TEST(test_max_length_username),
       TEST(test_unterminated_fields_rejected),
+      TEST(test_null_request_rejected),
       TEST(test_unknown_kind_is_internal_error),
       TEST(test_ring_wraps_with_queued_results),
       TEST(test_result_echoes_request),

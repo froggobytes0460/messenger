@@ -120,6 +120,9 @@ void auth_init(user_store_t* store) {
 }
 
 bool auth_submit(const auth_req_t* req) {
+  if (!req) {
+    return false;
+  }
   // A request keeps its place until its result is collected, so every
   // accepted request is guaranteed room for its result.
   if (requests_count + results_count >= AUTH_QUEUE_CAP) {
