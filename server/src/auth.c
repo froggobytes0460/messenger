@@ -2,6 +2,8 @@
 #include <server/constants.h>
 #include <server/log.h>
 #include <server/user_store.h>
+#include <sodium/crypto_pwhash.h>
+#include <sodium/utils.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
@@ -32,7 +34,7 @@ static void push_request(const auth_req_t* req) {
 /// password). The caller must check that the queue is not empty.
 static void pop_request(auth_req_t* out) {
   memcpy(out, &requests[requests_head], sizeof(*out));
-  explicit_bzero(&requests[requests_head], sizeof(requests[requests_head]));
+  auth_wipe(&requests[requests_head], sizeof(requests[requests_head]));
   requests_head = (requests_head + 1) % AUTH_QUEUE_CAP;
   requests_count--;
 }
@@ -60,7 +62,7 @@ static auth_outcome_t register_user(const auth_req_t* req) {
 }
 
 static auth_outcome_t login_user(const auth_req_t* req) {
-  char pass_hash[USER_HASH_MAX_SIZE];
+  char pass_hash[crypto_pwhash_STRBYTES];
   auth_outcome_t outcome = AUTH_INTERNAL;
   switch (user_store_get_hash(g_user_store, req->username, pass_hash,
                               sizeof(pass_hash))) {
@@ -78,7 +80,7 @@ static auth_outcome_t login_user(const auth_req_t* req) {
       break;
   }
   // Until hashing exists the stored value is the plaintext password.
-  explicit_bzero(pass_hash, sizeof(pass_hash));
+  auth_wipe(pass_hash, sizeof(pass_hash));
   return outcome;
 }
 
@@ -106,15 +108,17 @@ static void run_pending(void) {
     auth_result_t result;
     pop_request(&req);
     process_request(&req, &result);
-    explicit_bzero(&req, sizeof(req));  // holds a password
+    auth_wipe(&req, sizeof(req));  // holds a password
     push_result(&result);
   }
 }
 
+void auth_wipe(void* buf, size_t len) { sodium_memzero(buf, len); }
+
 void auth_init(user_store_t* store) {
   g_user_store = store;
-  explicit_bzero(requests, sizeof(requests));  // may still hold passwords
-  explicit_bzero(results, sizeof(results));
+  auth_wipe(requests, sizeof(requests));  // may still hold passwords
+  auth_wipe(results, sizeof(results));
   requests_head = requests_tail = requests_count = 0;
   results_head = results_tail = results_count = 0;
 }

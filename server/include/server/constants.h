@@ -35,7 +35,5 @@ _Static_assert(MAX_REPLY >=
 #define AUTH_QUEUE_CAP 300   ///< Limit on length of authentication queue.
 #define MAX_AUTH_ATTEMPTS 3  ///< Maximum authentication attempts allowed.
 #define DEFAULT_DB_PATH "./messenger.db"  ///< The default path for database.
-#define USER_HASH_MAX_SIZE \
-  32  ///< Maximum number of bytes a password hash can get.
 
 #endif  // !CONSTANTS_H

@@ -224,7 +224,7 @@ static void handle_login(const protocol_cmd_t* cmd, poll_mgr_t* mgr,
   } else {
     send_err(mgr, client->fd, "busy");
   }
-  explicit_bzero(&auth_req, sizeof(auth_req));  // holds a password
+  auth_wipe(&auth_req, sizeof(auth_req));  // holds a password
 }
 
 static void handle_connected(chat_client_t* client, poll_mgr_t* mgr,
@@ -283,8 +283,8 @@ static void handle_line(chat_client_t* client, poll_mgr_t* mgr, chat_t* chat) {
     }
   }
 
-  explicit_bzero(&cmd, sizeof(cmd));  // may hold a password
-  explicit_bzero(&client->inbuf, sizeof(client->inbuf));
+  auth_wipe(&cmd, sizeof(cmd));  // may hold a password
+  auth_wipe(&client->inbuf, sizeof(client->inbuf));
 }
 
 static void on_message(void* ctx, poll_mgr_t* mgr, int sender_fd,
@@ -320,7 +320,7 @@ static void on_disconnect(void* ctx, poll_mgr_t* mgr, int client_fd) {
   if (!client) {
     return;
   }
-  explicit_bzero(client, sizeof(*client));  // inbuf may hold a partial line
+  auth_wipe(client, sizeof(*client));  // inbuf may hold a partial line
 }
 
 static void on_connect(void* ctx, poll_mgr_t* mgr, int client_fd) {

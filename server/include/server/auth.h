@@ -17,6 +17,7 @@
 #include <server/user_store.h>
 #include <server/uuid.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 /**
  * @brief The type of authentication being done.
@@ -99,5 +100,12 @@ bool auth_submit(const auth_req_t* req);
  * @return true if @p out was filled, false if no result is ready.
  */
 bool auth_collect(auth_result_t* out);
+
+/**
+ * @brief Mandates a wipe of the buffer provide.
+ * @param[out] buf The buffer to wipe.
+ * @param[in] len The length of buffer.
+ */
+void auth_wipe(void* buf, size_t len);
 
 #endif  // !AUTH_H
