@@ -6,6 +6,7 @@
 #include <server/poll_mgr.h>
 #include <server/user_store.h>
 #include <signal.h>
+#include <sodium/core.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sysexits.h>
@@ -51,6 +52,12 @@ int main(int argc, char* argv[]) {
   if (cli_args.verbose) {
     log_set_level(LOG_LEVEL_DEBUG);
     log_info("Verbosity set to true.");
+  }
+
+  if (sodium_init() == -1) {
+    log_error("error in initializing libsodium");
+    log_close();
+    return EX_SOFTWARE;
   }
 
   user_store_t* user_store = user_store_open(cli_args.databasePath);
