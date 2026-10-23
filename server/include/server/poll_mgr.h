@@ -53,6 +53,9 @@ typedef struct {
   void* ctx;  ///< User data passed as the first argument to every handler.
 } poll_callback_t;
 
+/// Returned by @ref poll_mgr_send when the client's output queue is full.
+#define POLL_MGR_SEND_FULL (-2)
+
 /**
  * @brief Initializes a poll manager.
  * @param[out] mgr Poll manager to initialize.
@@ -85,7 +88,9 @@ void poll_mgr_request_stop(void);
  * @param[in] fd The socket file descriptor of the client to send.
  * @param[in] buf The bytes to send to client. (not NUL-terminated)
  * @param[in] len The length of the @p buf .
- * @return 0 on successful execution, -1 on error.
+ * @return 0 on success, -1 on error (unknown fd or socket failure), or
+ * @ref POLL_MGR_SEND_FULL if the queue is full and nothing was queued. The
+ * client is not flagged for closing in either failure case.
  */
 int poll_mgr_send(poll_mgr_t* mgr, int fd, const char* buf, size_t len);
 
@@ -95,5 +100,13 @@ int poll_mgr_send(poll_mgr_t* mgr, int fd, const char* buf, size_t len);
  * @param[in] client_fd The client socket fd to be closed.
  */
 void poll_mgr_close(poll_mgr_t* mgr, int client_fd);
+
+/**
+ * @brief Tells whether a client is already flagged for closing.
+ * @param[in] mgr Poll manager holding connected clients.
+ * @param[in] client_fd The client socket fd to check.
+ * @return true if the client is flagged for closing or is unknown.
+ */
+bool poll_mgr_is_closing(const poll_mgr_t* mgr, int client_fd);
 
 #endif  // !POLL_MGR_H

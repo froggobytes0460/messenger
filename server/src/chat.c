@@ -121,7 +121,13 @@ static void reroute_msg(chat_t* chat, const protocol_cmd_t* cmd,
     send_proto_err(mgr, client->fd, rc);
     return;
   }
-  if (poll_mgr_send(mgr, recipient->fd, reply, len_reply) == -1) {
+  int sent = poll_mgr_send(mgr, recipient->fd, reply, len_reply);
+  if (sent == POLL_MGR_SEND_FULL) {
+    // A slow reader must not be kicked by someone else's messages.
+    send_err(mgr, client->fd, "recipient busy");
+    return;
+  }
+  if (sent < 0) {
     send_err(mgr, client->fd, "no such user");
     poll_mgr_close(mgr, recipient->fd);
     return;
@@ -187,7 +193,8 @@ static void remove_unauth_clients(chat_t* chat, poll_mgr_t* mgr) {
 
   for (size_t i = 0; i < MAX_CONNECTIONS; i++) {
     if (chat->clients[i].state == CLIENT_AUTHENTICATED ||
-        !chat->clients[i].active) {
+        !chat->clients[i].active ||
+        poll_mgr_is_closing(mgr, chat->clients[i].fd)) {
       continue;
     }
     if (get_time_diff(&chat->clients[i].connected_at, &now) >
@@ -284,6 +291,9 @@ static void on_message(void* ctx, poll_mgr_t* mgr, int sender_fd,
 
   for (size_t i = 0; i < len; i++) {
     if (buf[i] == '\n') {
+      if (poll_mgr_is_closing(mgr, sender_fd)) {
+        return;  // Already being closed: ignore the rest of the packet.
+      }
       handle_line(client, mgr, chat);
       client->inlen = 0;
       client->overflow = false;

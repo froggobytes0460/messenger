@@ -69,7 +69,7 @@ static int queue_bytes(outbuf_t* out, const char* buf, size_t len) {
   return 0;
 }
 
-static ssize_t find_index(poll_mgr_t* mgr, int sockfd) {
+static ssize_t find_index(const poll_mgr_t* mgr, int sockfd) {
   for (size_t i = 1; i < mgr->nfds; i++) {
     if (mgr->fds[i].fd == sockfd) {
       return (ssize_t)i;
@@ -339,11 +339,19 @@ int poll_mgr_send(poll_mgr_t* mgr, int fd, const char* buf, size_t len) {
     len -= (size_t)sent;
   }
   if (queue_bytes(out, buf, len) == -1) {
-    return -1;
+    return POLL_MGR_SEND_FULL;
   }
   // NOLINTNEXTLINE(bugprone-signed-bitwise)
   mgr->fds[idx].events |= POLLOUT;
   return 0;
+}
+
+bool poll_mgr_is_closing(const poll_mgr_t* mgr, int client_fd) {
+  ssize_t idx = find_index(mgr, client_fd);
+  if (idx == -1) {
+    return true;
+  }
+  return mgr->closing[idx];
 }
 
 void poll_mgr_close(poll_mgr_t* mgr, int client_fd) {
