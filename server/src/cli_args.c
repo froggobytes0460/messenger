@@ -72,6 +72,10 @@ int parse_args(struct ParsedArgs* args_out, int argc, char* argv[]) {
         return EX_USAGE;
     }
   }
+  if (optind < argc) {
+    (void)fprintf(stderr, "Error: unexpected argument '%s'\n", argv[optind]);
+    return EX_USAGE;
+  }
   // NOLINTEND(misc-include-cleaner)
   return 0;
 }

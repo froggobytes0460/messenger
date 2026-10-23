@@ -29,7 +29,8 @@ struct ParsedArgs {
  * @param[out] args_out The arguments parsed from the CLI.
  * @param[in] argc The argc passed to @c main
  * @param[in] argv The argv passed to @c main
- * @return 0 on success, @c EXIT_FAILURE on invalid arguments.
+ * @return 0 on success, @c EX_USAGE on invalid arguments (bad value, unknown
+ * option, missing option argument or a stray positional argument).
  */
 int parse_args(struct ParsedArgs* args_out, int argc, char* argv[]);
 
