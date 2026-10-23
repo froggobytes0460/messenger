@@ -49,6 +49,7 @@ static const bad_case_t bad_cases[] = {
     {"login trailing space", "LOGIN bob pw ", PROTO_ERR_BAD_INPUT},
     {"byte >= 0x80", "LOGIN bob p\xc3\xa9", PROTO_ERR_BAD_INPUT},
     {"missing msg text", "MSG alice", PROTO_ERR_MISSING},
+    {"msg text of only spaces", "MSG alice    ", PROTO_ERR_MISSING},
     {
         "username over limit",
         "LOGIN aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pw",  // 33 'a'

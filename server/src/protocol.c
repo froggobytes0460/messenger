@@ -138,7 +138,15 @@ static proto_status_t parse_msg(cursor_t* c, protocol_cmd_t* out) {
   if (!skip_sep(c)) {
     return PROTO_ERR_MISSING;
   }
-  return copy_field(out->text, MAX_TEXT, c->cur, (size_t)(c->end - c->cur));
+  size_t text_len = (size_t)(c->end - c->cur);
+  size_t first_char = 0;
+  while (first_char < text_len && c->cur[first_char] == ' ') {
+    first_char++;
+  }
+  if (first_char == text_len) {
+    return PROTO_ERR_MISSING;  // Nothing but spaces is not a message.
+  }
+  return copy_field(out->text, MAX_TEXT, c->cur, text_len);
 }
 
 static bool lookup_command(const char* tok, size_t n, commands_t* type) {

@@ -24,7 +24,7 @@ typedef enum {
  */
 typedef enum {
   PROTO_OK,             ///< Successful operation
-  PROTO_ERR_UNKNOWN,    ///< Unkown error
+  PROTO_ERR_UNKNOWN,    ///< Unknown error
   PROTO_ERR_MISSING,    ///< Missing requirements error
   PROTO_ERR_TOO_LONG,   ///< Input/Output text too long error
   PROTO_ERR_BAD_INPUT,  ///< Bad input from client error
