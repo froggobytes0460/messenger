@@ -81,7 +81,7 @@ static void test_get_hash_buffer_too_small(void** state) {
   user_store_t* store = *state;
   assert_int_equal(user_store_create(store, "alice", "hash1"), DB_OK);
   // "hash1" needs 6 bytes with the NUL; 5 must fail rather than truncate.
-  char exact[sizeof("hash1") + 1];
+  char exact[sizeof("hash1") - 1];
   assert_int_equal(user_store_get_hash(store, "alice", exact, sizeof(exact)),
                    DB_ERROR);
   char tiny[sizeof("hash1") - 2];
@@ -184,7 +184,7 @@ static void test_file_database_persists(void** state) {
   assert_int_equal(user_store_create(store, "alice", "hash2"), DB_EXISTS);
   user_store_close(store);
 
-  char wal[sizeof(path) + 8];
+  char wal[sizeof(path) + sizeof("-wal")];
   unlink(path);
   (void)snprintf(wal, sizeof(wal), "%s-wal", path);
   unlink(wal);
