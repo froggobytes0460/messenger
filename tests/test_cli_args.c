@@ -28,6 +28,7 @@ static void test_defaults(void** state) {
   struct ParsedArgs args;
   assert_int_equal(parse(&args, dynamic_argc, argv), 0);
   assert_int_equal(args.portNumber, PORT_NUMBER_DEFAULT);
+  assert_string_equal(args.ipString, IP_HOST_DEFAULT);
   assert_int_equal(args.backlog, BACKLOG_DEFAULT);
   assert_false(args.verbose);
   assert_null(args.logFile);
@@ -44,11 +45,32 @@ static void test_verbose_flag(void** state) {
 
 static void test_port_and_log(void** state) {
   (void)state;
-  char* argv[] = {"server", "-p", "9000", "-l", "out.log", NULL};
+  char* argv[] = {"server", "-l", "out.log", "9000", NULL};
   struct ParsedArgs args;
   assert_int_equal(parse(&args, dynamic_argc, argv), 0);
   assert_int_equal(args.portNumber, 9000);
+  assert_string_equal(args.ipString, IP_HOST_DEFAULT);
   assert_string_equal(args.logFile, "out.log");
+}
+
+static void test_host_and_port(void** state) {
+  (void)state;
+  char* argv[] = {"server", "127.0.0.1", "9000", NULL};
+  struct ParsedArgs args;
+  assert_int_equal(parse(&args, dynamic_argc, argv), 0);
+  assert_string_equal(args.ipString, "127.0.0.1");
+  assert_int_equal(args.portNumber, 9000);
+}
+
+static void test_options_with_host_and_port(void** state) {
+  (void)state;
+  char* argv[] = {"server", "-v", "-b", "5", "::1", "65535", NULL};
+  struct ParsedArgs args;
+  assert_int_equal(parse(&args, dynamic_argc, argv), 0);
+  assert_true(args.verbose);
+  assert_int_equal(args.backlog, 5);
+  assert_string_equal(args.ipString, "::1");
+  assert_int_equal(args.portNumber, 65535);
 }
 
 static void test_database_path(void** state) {
@@ -61,7 +83,7 @@ static void test_database_path(void** state) {
 
 static void test_invalid_port(void** state) {
   (void)state;
-  char* argv[] = {"server", "-p", "99999", NULL};
+  char* argv[] = {"server", "99999", NULL};
   struct ParsedArgs args;
   assert_int_equal(parse(&args, dynamic_argc, argv), EX_USAGE);
 }
@@ -77,19 +99,28 @@ static void test_backlog(void** state) {
 /// Every row must be rejected with EX_USAGE.
 static void test_rejected_arguments(void** state) {
   (void)state;
-  static char* const rows[][4] = {
-      {"server", "-p", "0", NULL},       {"server", "-p", "-1", NULL},
-      {"server", "-p", "80x", NULL},     {"server", "-p", "abc", NULL},
-      {"server", "-p", "", NULL},        {"server", "-b", "-1", NULL},
-      {"server", "-b", "x", NULL},       {"server", "-p", NULL, NULL},
-      {"server", "-z", NULL, NULL},      {"server", "extra", NULL, NULL},
-      {"server", "-p", "9000", "extra"},
+  enum { ROW_LEN = 5 };
+  static char* const rows[][ROW_LEN] = {
+      {"server", "0", NULL},
+      {"server", "--", "-1", NULL},
+      {"server", "80x", NULL},
+      {"server", "abc", NULL},
+      {"server", "", NULL},
+      {"server", "localhost", NULL},
+      {"server", "localhost", "99999", NULL},
+      {"server", "localhost", "abc", NULL},
+      {"server", "a", "b", "9000", NULL},
+      {"server", "-b", "-1", NULL},
+      {"server", "-b", "x", NULL},
+      {"server", "-b", NULL},
+      {"server", "-p", "9000", NULL},
+      {"server", "-z", NULL},
   };
   for (size_t i = 0; i < sizeof(rows) / sizeof(rows[0]); i++) {
-    char* argv[4];
-    memcpy(argv, rows[i], sizeof(argv));
+    char* argv[ROW_LEN];
+    memcpy((void*)argv, (const void*)rows[i], sizeof(argv));
     int argc = 0;
-    while (argc < 4 && argv[argc] != NULL) {
+    while (argc < ROW_LEN && argv[argc] != NULL) {
       argc++;
     }
     print_message("row %zu: argc=%d first arg '%s'\n", i, argc, argv[1]);
@@ -109,6 +140,8 @@ int main(void) {
       cmocka_unit_test(test_defaults),
       cmocka_unit_test(test_verbose_flag),
       cmocka_unit_test(test_port_and_log),
+      cmocka_unit_test(test_host_and_port),
+      cmocka_unit_test(test_options_with_host_and_port),
       cmocka_unit_test(test_database_path),
       cmocka_unit_test(test_invalid_port),
       cmocka_unit_test(test_backlog),

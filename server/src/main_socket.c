@@ -1,3 +1,5 @@
+#include <asm-generic/errno.h>
+#include <errno.h>
 #include <netdb.h>
 #include <server/constants.h>
 #include <server/log.h>
@@ -10,7 +12,7 @@
 
 #define LOG_TAG "main_socket"
 
-int get_main_socket(unsigned short port, int* fd_out) {
+int get_main_socket(const char* host, unsigned short port, int* fd_out) {
   struct addrinfo hints;
   struct addrinfo* res;
 
@@ -22,7 +24,7 @@ int get_main_socket(unsigned short port, int* fd_out) {
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE;
 
-  int rc = getaddrinfo(NULL, port_str, &hints, &res);
+  int rc = getaddrinfo(host, port_str, &hints, &res);
   if (rc != 0) {
     log_error("getaddrinfo: %s", gai_strerror(rc));
     return EX_NOHOST;
@@ -49,7 +51,11 @@ int get_main_socket(unsigned short port, int* fd_out) {
     if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
       log_perror("bind");
       close(sockfd);
-      continue;
+      if (errno != EADDRINUSE) {
+        continue;
+      }
+      freeaddrinfo(res);
+      return EX_UNAVAILABLE;
     }
 
     break;

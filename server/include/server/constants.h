@@ -11,8 +11,9 @@
 #define MAX_PORT_STR_LEN 7  ///< Size of the buffer holding a port as a string.
 #define DECIMAL_INTEGER_BASE \
   10  ///< Base passed to strtol() when parsing numbers.
-#define PORT_NUMBER_DEFAULT 8000  ///< Port listened on when none is given.
-#define BACKLOG_DEFAULT 10        ///< Default listen() backlog.
+#define PORT_NUMBER_DEFAULT 8000     ///< Port listened on when none is given.
+#define IP_HOST_DEFAULT "localhost"  ///< Default IP address to host server on
+#define BACKLOG_DEFAULT 10           ///< Default listen() backlog.
 #define BUFFER_SIZE 1024  ///< Size of per-client and receive buffers, in bytes.
 #define MAX_CONNECTIONS 100   ///< Maximum number of simultaneous clients.
 #define LOG_TIMESTAMP_LEN 32  ///< Size of the log timestamp buffer, in bytes.

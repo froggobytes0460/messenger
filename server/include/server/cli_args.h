@@ -21,6 +21,9 @@ struct ParsedArgs {
   /// Points into @c argv , so it lives as long as the program.
   const char* logFile;
   const char* databasePath;  ///< The path to database.
+  /// The string pointing to the IP address, to which the server should be
+  /// pointing to.
+  const char* ipString;
 };
 
 /**

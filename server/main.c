@@ -69,11 +69,8 @@ int main(int argc, char* argv[]) {
   log_info("Using database in path \"%s\"", cli_args.databasePath);
   auth_init(user_store);
 
-  log_info("initializing, port %hu, backlog %u", cli_args.portNumber,
-           cli_args.backlog);
-
   int listen_fd = -1;
-  rc = get_main_socket(cli_args.portNumber, &listen_fd);
+  rc = get_main_socket(cli_args.ipString, cli_args.portNumber, &listen_fd);
   if (rc != 0) {
     user_store_close(user_store);
     log_close();
@@ -85,6 +82,9 @@ int main(int argc, char* argv[]) {
     rc = EX_OSERR;
     goto cleanup_and_exit;
   }
+
+  log_info("initialized, address [%s]:%hu, backlog %u", cli_args.ipString,
+           cli_args.portNumber, cli_args.backlog);
 
   if (install_stop_handlers() != 0) {
     log_perror("sigaction");
