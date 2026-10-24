@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <netdb.h>
 #include <server/constants.h>
 #include <server/log.h>
@@ -10,7 +11,8 @@
 
 #define LOG_TAG "main_socket"
 
-int get_main_socket(unsigned short port, int* fd_out) {
+int get_main_socket(const char* host, unsigned short port, int* fd_out) {
+  int rc = 0;
   struct addrinfo hints;
   struct addrinfo* res;
 
@@ -22,14 +24,14 @@ int get_main_socket(unsigned short port, int* fd_out) {
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE;
 
-  int rc = getaddrinfo(NULL, port_str, &hints, &res);
+  rc = getaddrinfo(host, port_str, &hints, &res);
   if (rc != 0) {
     log_error("getaddrinfo: %s", gai_strerror(rc));
     return EX_NOHOST;
   }
 
   struct addrinfo* p;
-  int sockfd;
+  int sockfd = -1;
 
   for (p = res; p != NULL; p = p->ai_next) {
     sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
@@ -41,15 +43,20 @@ int get_main_socket(unsigned short port, int* fd_out) {
     // NOLINTNEXTLINE(misc-include-cleaner)
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int))) {
       log_perror("setsockopt");
-      close(sockfd);
-      freeaddrinfo(res);
-      return EX_OSERR;
+      rc = EX_OSERR;
+      goto cleanup;
     }
 
     if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+      int bind_errno = errno;
       log_perror("bind");
-      close(sockfd);
-      continue;
+      // NOLINTNEXTLINE(misc-include-cleaner)
+      if (bind_errno != EADDRINUSE) {
+        close(sockfd);
+        continue;
+      }
+      rc = EX_UNAVAILABLE;
+      goto cleanup;
     }
 
     break;
@@ -57,12 +64,17 @@ int get_main_socket(unsigned short port, int* fd_out) {
 
   if (!p) {
     log_error("failed to bind any address");
-    freeaddrinfo(res);
-    return EX_UNAVAILABLE;
+    rc = EX_UNAVAILABLE;
+    goto cleanup;
   }
 
-  freeaddrinfo(res);
   *fd_out = sockfd;
+  sockfd = -1;  // Ensure socket is not closed.
 
-  return 0;
+cleanup:
+  if (sockfd != -1) {
+    close(sockfd);
+  }
+  freeaddrinfo(res);
+  return rc;
 }
