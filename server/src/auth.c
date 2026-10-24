@@ -10,8 +10,13 @@
 
 #define LOG_TAG "auth"
 
-/// The dummy hash to use when the user is non-existant
+/// Valid hash verified against for unknown users, so a failed login takes as
+/// long whether or not the name exists. Rebuilt by @ref auth_init.
 static char dummy_hash[crypto_pwhash_STRBYTES];
+
+/// Argon2 cost for new hashes; see @ref auth_set_hash_cost.
+static unsigned long long hash_ops = crypto_pwhash_OPSLIMIT_INTERACTIVE;
+static size_t hash_mem = crypto_pwhash_MEMLIMIT_INTERACTIVE;
 
 static user_store_t* g_user_store;  ///< Borrowed; the caller closes it.
 
@@ -50,9 +55,8 @@ static void push_result(const auth_result_t* result) {
 
 static auth_outcome_t register_user(const auth_req_t* req) {
   char hash[crypto_pwhash_STRBYTES];
-  if (crypto_pwhash_str(hash, req->password, strlen(req->password),
-                        crypto_pwhash_OPSLIMIT_INTERACTIVE,
-                        crypto_pwhash_MEMLIMIT_INTERACTIVE) != 0) {
+  if (crypto_pwhash_str(hash, req->password, strlen(req->password), hash_ops,
+                        hash_mem) != 0) {
     log_error("password hash generation failed (out of memory).");
     return AUTH_INTERNAL;
   }
@@ -84,8 +88,8 @@ static auth_outcome_t login_user(const auth_req_t* req) {
                     : AUTH_BAD_CREDENTIALS;
       break;
     case DB_NOT_FOUND: {
-      // Does the time taking verification even on unkown users to avoid
-      // revealing usernames.
+      // Verify against a dummy hash even for unknown users, so the response
+      // time does not reveal which usernames exist.
       const int ignored = crypto_pwhash_str_verify(dummy_hash, req->password,
                                                    strlen(req->password));
       (void)ignored;
@@ -133,6 +137,19 @@ static void run_pending(void) {
 
 void auth_wipe(void* buf, size_t len) { sodium_memzero(buf, len); }
 
+void auth_set_hash_cost(auth_hash_cost_t cost) {
+  switch (cost) {
+    case AUTH_HASH_COST_FAST:
+      hash_ops = crypto_pwhash_OPSLIMIT_MIN;
+      hash_mem = crypto_pwhash_MEMLIMIT_MIN;
+      return;
+    case AUTH_HASH_COST_NORMAL:
+      break;
+  }
+  hash_ops = crypto_pwhash_OPSLIMIT_INTERACTIVE;
+  hash_mem = crypto_pwhash_MEMLIMIT_INTERACTIVE;
+}
+
 void auth_init(user_store_t* store) {
   g_user_store = store;
   auth_wipe(requests, sizeof(requests));  // may still hold passwords
@@ -141,8 +158,7 @@ void auth_init(user_store_t* store) {
   results_head = results_tail = results_count = 0;
   if (store &&
       crypto_pwhash_str(dummy_hash, "DUMMY-PASSWORD", strlen("DUMMY-PASSWORD"),
-                        crypto_pwhash_OPSLIMIT_INTERACTIVE,
-                        crypto_pwhash_MEMLIMIT_INTERACTIVE) != 0) {
+                        hash_ops, hash_mem) != 0) {
     log_error("dummy password hash generation failed");
   }
 }

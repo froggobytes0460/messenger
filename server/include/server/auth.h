@@ -102,10 +102,35 @@ bool auth_submit(const auth_req_t* req);
 bool auth_collect(auth_result_t* out);
 
 /**
- * @brief Mandates a wipe of the buffer provide.
- * @param[out] buf The buffer to wipe.
- * @param[in] len The length of buffer.
+ * @brief Securely zeroes a buffer; the compiler cannot optimize it away.
+ * @param[in,out] buf The buffer to wipe.
+ * @param[in] len The length of the buffer in bytes.
  */
 void auth_wipe(void* buf, size_t len);
+
+/**
+ * @brief How expensive it is to hash a new password.
+ */
+typedef enum {
+  AUTH_HASH_COST_NORMAL,  ///< Production setting (the default)
+  AUTH_HASH_COST_FAST,    ///< Cheapest possible; for tests only, NOT secure
+} auth_hash_cost_t;
+
+/**
+ * @brief Chooses the cost of hashing new passwords.
+ *
+ * Meant for tests: with @ref AUTH_HASH_COST_FAST a hash takes microseconds
+ * instead of tens of milliseconds, so suites that submit hundreds of requests
+ * stay fast. Existing hashes keep verifying, because their cost is stored in
+ * the hash string.
+ *
+ * @param[in] cost The cost to use from now on.
+ *
+ * @note Call it before @ref auth_init: the dummy hash used for unknown users is
+ * built there with the cost in effect at that moment.
+ *
+ * @warning Never call it with @ref AUTH_HASH_COST_FAST in the server.
+ */
+void auth_set_hash_cost(auth_hash_cost_t cost);
 
 #endif  // !AUTH_H

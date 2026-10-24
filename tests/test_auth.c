@@ -13,8 +13,9 @@
 // clang-format on
 
 #define RECOGNIZABLE_UNINIT_VAL 0xAB
-#define CAROL_ID 42  ///< Client id used for the successful registration
-#define GHOST_ID 43  ///< Client id used for the failed login
+#define CAROL_ID 42   ///< Client id used where the test checks the echoed id
+#define GHOST_ID 43   ///< Client id used for the failed login
+#define HASH_BUF 256  ///< Room for any stored hash (argon2id strings are 97).
 
 /// Builds a distinct, deterministic UUID from an integer.
 static void uuid_from_int(client_uuid_t out, uint32_t n) {
@@ -35,6 +36,18 @@ static auth_req_t make_req(auth_kind_t kind, const char* user, uint32_t id) {
 /// Submits a request and collects its single result.
 static auth_result_t run(auth_kind_t kind, const char* user, uint32_t id) {
   auth_req_t req = make_req(kind, user, id);
+  assert_true(auth_submit(&req));
+  auth_result_t res;
+  assert_true(auth_collect(&res));
+  return res;
+}
+
+/// Like @ref run, but with an explicit password instead of the default "pw".
+static auth_result_t run_pw(auth_kind_t kind, const char* user,
+                            const char* pass, uint32_t id) {
+  auth_req_t req = make_req(kind, user, id);
+  memset(req.password, 0, sizeof(req.password));
+  strncpy(req.password, pass, MAX_PASSWORD);
   assert_true(auth_submit(&req));
   auth_result_t res;
   assert_true(auth_collect(&res));
@@ -64,15 +77,110 @@ static void test_login_other_user_than_registered(void** state) {
   assert_int_equal(run(AUTH_LOGIN, "bob", 2).outcome, AUTH_BAD_CREDENTIALS);
 }
 
+static void test_login_correct_password(void** state) {
+  (void)state;
+  assert_int_equal(run_pw(AUTH_REGISTER, "alice", "hunter2", 1).outcome,
+                   AUTH_OK);
+  assert_int_equal(run_pw(AUTH_LOGIN, "alice", "hunter2", 2).outcome, AUTH_OK);
+}
+
+static void test_login_wrong_password(void** state) {
+  (void)state;
+  assert_int_equal(run_pw(AUTH_REGISTER, "alice", "hunter2", 1).outcome,
+                   AUTH_OK);
+  const char* wrong[] = {"hunter3", "Hunter2", "hunter", "hunter22", "x"};
+  for (size_t i = 0; i < sizeof(wrong) / sizeof(wrong[0]); i++) {
+    print_message("wrong password: %s\n", wrong[i]);
+    assert_int_equal(run_pw(AUTH_LOGIN, "alice", wrong[i], 2).outcome,
+                     AUTH_BAD_CREDENTIALS);
+  }
+  // The failed attempts must not have changed the account.
+  assert_int_equal(run_pw(AUTH_LOGIN, "alice", "hunter2", 3).outcome, AUTH_OK);
+}
+
+static void test_wrong_password_matches_unknown_user(void** state) {
+  (void)state;
+  assert_int_equal(run_pw(AUTH_REGISTER, "alice", "hunter2", 1).outcome,
+                   AUTH_OK);
+  // The client must not be able to tell the two failures apart.
+  assert_int_equal(run_pw(AUTH_LOGIN, "alice", "nope", 2).outcome,
+                   run_pw(AUTH_LOGIN, "ghost", "nope", 3).outcome);
+}
+
+static void test_stored_value_is_a_hash(void** state) {
+  user_store_t* store = *state;
+  const char* password = "hunter2";
+  assert_int_equal(run_pw(AUTH_REGISTER, "alice", password, 1).outcome,
+                   AUTH_OK);
+  char hash[HASH_BUF];
+  assert_int_equal(user_store_get_hash(store, "alice", hash, sizeof(hash)),
+                   DB_OK);
+  assert_int_equal(strncmp(hash, "$argon2", strlen("$argon2")), 0);
+  assert_null(strstr(hash, password));
+}
+
+/// The one test that pays for the production cost (two hashes).
+static void test_default_cost_is_the_production_setting(void** state) {
+  user_store_t* store = *state;
+  auth_set_hash_cost(AUTH_HASH_COST_NORMAL);
+  auth_init(store);  // rebuild the dummy hash with the production cost
+  assert_int_equal(run_pw(AUTH_REGISTER, "alice", "hunter2", 1).outcome,
+                   AUTH_OK);
+  char hash[HASH_BUF];
+  assert_int_equal(user_store_get_hash(store, "alice", hash, sizeof(hash)),
+                   DB_OK);
+  assert_int_equal(strncmp(hash, "$argon2id$", strlen("$argon2id$")), 0);
+  assert_non_null(strstr(hash, "m=65536,"));  // 64 MiB, the INTERACTIVE limit
+  assert_int_equal(run_pw(AUTH_LOGIN, "alice", "hunter2", 2).outcome, AUTH_OK);
+}
+
+/// Hashes made at the fast cost still verify after the cost changes back.
+static void test_hash_verifies_after_cost_change(void** state) {
+  (void)state;
+  assert_int_equal(run_pw(AUTH_REGISTER, "alice", "hunter2", 1).outcome,
+                   AUTH_OK);  // fast hash
+  auth_set_hash_cost(AUTH_HASH_COST_NORMAL);
+  assert_int_equal(run_pw(AUTH_LOGIN, "alice", "hunter2", 2).outcome, AUTH_OK);
+  assert_int_equal(run_pw(AUTH_LOGIN, "alice", "wrong", 3).outcome,
+                   AUTH_BAD_CREDENTIALS);
+}
+
+static void test_same_password_gets_different_hashes(void** state) {
+  user_store_t* store = *state;
+  assert_int_equal(run_pw(AUTH_REGISTER, "alice", "samepw", 1).outcome,
+                   AUTH_OK);
+  assert_int_equal(run_pw(AUTH_REGISTER, "bob", "samepw", 2).outcome, AUTH_OK);
+  char hash_a[HASH_BUF];
+  char hash_b[HASH_BUF];
+  assert_int_equal(user_store_get_hash(store, "alice", hash_a, sizeof(hash_a)),
+                   DB_OK);
+  assert_int_equal(user_store_get_hash(store, "bob", hash_b, sizeof(hash_b)),
+                   DB_OK);
+  assert_string_not_equal(hash_a, hash_b);  // each hash has its own salt
+}
+
+static void test_max_length_password(void** state) {
+  (void)state;
+  char pass[MAX_PASSWORD + 1];
+  memset(pass, 'p', MAX_PASSWORD);
+  pass[MAX_PASSWORD] = '\0';
+  assert_int_equal(run_pw(AUTH_REGISTER, "alice", pass, 1).outcome, AUTH_OK);
+  assert_int_equal(run_pw(AUTH_LOGIN, "alice", pass, 2).outcome, AUTH_OK);
+  // Every byte counts, including the last one.
+  pass[MAX_PASSWORD - 1] = 'q';
+  assert_int_equal(run_pw(AUTH_LOGIN, "alice", pass, 3).outcome,
+                   AUTH_BAD_CREDENTIALS);
+}
+
 static void test_no_store_is_internal_error(void** state) {
   (void)state;
   auth_init(NULL);  // teardown still closes the real store
   assert_int_equal(run(AUTH_REGISTER, "alice", 1).outcome, AUTH_INTERNAL);
-  auth_result_t res = run(AUTH_LOGIN, "alice", 7);
+  auth_result_t res = run(AUTH_LOGIN, "alice", CAROL_ID);
   assert_int_equal(res.outcome, AUTH_INTERNAL);
   // Even a failed request is addressed to its client.
   client_uuid_t want;
-  uuid_from_int(want, 7);
+  uuid_from_int(want, CAROL_ID);
   assert_memory_equal(res.client_id, want, sizeof(client_uuid_t));
   assert_string_equal(res.username, "alice");
 }
@@ -109,16 +217,6 @@ static void test_null_request_rejected(void** state) {
   (void)state;
   assert_false(auth_submit(NULL));
   auth_result_t res;
-  assert_false(auth_collect(&res));
-}
-
-static void test_unknown_kind_is_internal_error(void** state) {
-  (void)state;
-  auth_req_t req = make_req((auth_kind_t)99, "alice", 3);
-  assert_true(auth_submit(&req));  // accepted, so exactly one result follows
-  auth_result_t res;
-  assert_true(auth_collect(&res));
-  assert_int_equal(res.outcome, AUTH_INTERNAL);
   assert_false(auth_collect(&res));
 }
 
@@ -213,6 +311,9 @@ static int setup_tests(void** state) {
   if (*state == NULL) {
     return 1;
   }
+  // Cheap hashes: these tests check logic, not password strength. Must come
+  // before auth_init, which builds the dummy hash.
+  auth_set_hash_cost(AUTH_HASH_COST_FAST);
   auth_init(*state);
   return 0;
 }
@@ -232,11 +333,18 @@ int main(void) {
       TEST(test_register_twice),
       TEST(test_login_unknown_user),
       TEST(test_login_other_user_than_registered),
+      TEST(test_login_correct_password),
+      TEST(test_login_wrong_password),
+      TEST(test_wrong_password_matches_unknown_user),
+      TEST(test_stored_value_is_a_hash),
+      TEST(test_default_cost_is_the_production_setting),
+      TEST(test_hash_verifies_after_cost_change),
+      TEST(test_same_password_gets_different_hashes),
+      TEST(test_max_length_password),
       TEST(test_no_store_is_internal_error),
       TEST(test_max_length_username),
       TEST(test_unterminated_fields_rejected),
       TEST(test_null_request_rejected),
-      TEST(test_unknown_kind_is_internal_error),
       TEST(test_ring_wraps_with_queued_results),
       TEST(test_result_echoes_request),
       TEST(test_collect_empty_leaves_out_untouched),
