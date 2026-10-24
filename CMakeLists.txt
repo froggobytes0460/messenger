@@ -7,6 +7,7 @@ target_compile_options(compiler_flags INTERFACE -Wall -Wextra -Wpedantic
 
 find_package(SQLite3 REQUIRED) # Arch package: sqlite
 find_package(PkgConfig REQUIRED)
+find_package(Threads REQUIRED)
 
 pkg_check_modules(
   LIBSODIUM REQUIRED IMPORTED_TARGET libsodium

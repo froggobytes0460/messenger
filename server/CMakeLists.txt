@@ -6,6 +6,7 @@ target_link_libraries(server_core PRIVATE
   compiler_flags
   SQLite3::SQLite3
   PkgConfig::LIBSODIUM
+  Threads::Threads
 )
 
 add_executable(server main.c)
