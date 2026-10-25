@@ -75,6 +75,19 @@ typedef struct {
 void auth_init(user_store_t* store);
 
 /**
+ * @brief Descriptor that becomes readable when a result may be waiting.
+ *
+ * Create-once: @ref auth_init makes it (a non-blocking eventfd) and keeps it
+ * for the life of the process. Add it to the event loop with
+ * @c poll_mgr_set_wake_fd so a worker thread can wake the loop; the loop
+ * drains it. The caller must not close it.
+ *
+ * @return The descriptor, or -1 before @ref auth_init or if it could not be
+ * created.
+ */
+int auth_wake_fd(void);
+
+/**
  * @brief Submits an authentication request.
  *
  * The outcome is delivered through @ref auth_collect, never by this call.

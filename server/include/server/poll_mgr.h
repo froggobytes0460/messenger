@@ -20,17 +20,27 @@ typedef struct {
   char data[MAX_OUTBUF];  ///< The buffer storing queued messages.
 } outbuf_t;
 
+/// Slot of the listening socket in @ref poll_mgr_t::fds .
+#define POLL_MGR_LISTEN_SLOT 0
+/// Slot reserved for the wake fd (@c -1, so ignored by poll(), when unset).
+#define POLL_MGR_WAKE_SLOT 1
+/// First slot used by clients; the slots before it are never clients.
+#define POLL_MGR_FIRST_CLIENT_SLOT 2
+/// Size of the per-slot arrays: the reserved slots plus every client.
+#define POLL_MGR_SLOTS (MAX_CONNECTIONS + POLL_MGR_FIRST_CLIENT_SLOT)
+
 /**
- * @brief State containing the listening socket and all client sockets.
+ * @brief State containing the listening socket, the wake fd and all client
+ * sockets.
  */
 typedef struct {
   int listen_fd;  ///< The socket descriptor of the listening socket.
   size_t nfds;    ///< The number of socket descriptors in @c fds .
-  /// Polled descriptors (+1 for the listening socket).
-  struct pollfd fds[MAX_CONNECTIONS + 1];
-  outbuf_t out[MAX_CONNECTIONS + 1];  ///< Buffer queue for each client.
+  /// Polled descriptors: listener, wake fd, then the clients.
+  struct pollfd fds[POLL_MGR_SLOTS];
+  outbuf_t out[POLL_MGR_SLOTS];  ///< Buffer queue for each client.
   /// Flag array to indicate if client needs to be closed.
-  bool closing[MAX_CONNECTIONS + 1];
+  bool closing[POLL_MGR_SLOTS];
 } poll_mgr_t;
 
 /**
@@ -63,6 +73,19 @@ typedef struct {
  * @return 0 if successful, otherwise log error and return -1.
  */
 int poll_mgr_init(poll_mgr_t* mgr, int listen_fd);
+
+/**
+ * @brief Sets the descriptor that wakes the loop from outside.
+ *
+ * When @p wake_fd becomes readable, poll() returns, the manager drains it with
+ * one read() and @c on_tick runs. It is never reported as a client. The
+ * descriptor is borrowed: the caller creates it, keeps it open while it is set
+ * and closes it afterwards.
+ *
+ * @param[in,out] mgr Initialized poll manager.
+ * @param[in] wake_fd A non-blocking eventfd, or -1 to stop watching one.
+ */
+void poll_mgr_set_wake_fd(poll_mgr_t* mgr, int wake_fd);
 
 /**
  * @brief Runs the event loop.

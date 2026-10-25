@@ -7,7 +7,10 @@
 #include <sodium/utils.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
+#include <sys/eventfd.h>
+#include <unistd.h>
 
 #define LOG_TAG "auth"
 
@@ -20,6 +23,9 @@ static unsigned long long hash_ops = crypto_pwhash_OPSLIMIT_INTERACTIVE;
 static size_t hash_mem = crypto_pwhash_MEMLIMIT_INTERACTIVE;
 
 static user_store_t* g_user_store;  ///< Borrowed; the caller closes it.
+
+/// Doorbell for the event loop (see @ref auth_wake_fd); -1 until created.
+static int wake_fd = -1;
 
 /// Requests accepted by @ref auth_submit and not yet processed (FIFO ring).
 static auth_req_t requests[AUTH_QUEUE_CAP];
@@ -172,8 +178,25 @@ void auth_set_hash_cost(auth_hash_cost_t cost) {
   hash_mem = crypto_pwhash_MEMLIMIT_INTERACTIVE;
 }
 
+int auth_wake_fd(void) { return wake_fd; }
+
+/// Creates the wake fd once, or empties it if it exists (a stale wake from
+/// before a re-init would only cause one harmless extra tick).
+static void reset_wake_fd(void) {
+  if (wake_fd == -1) {
+    wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    if (wake_fd == -1) {
+      log_perror("eventfd");
+    }
+    return;
+  }
+  uint64_t counter = 0;
+  (void)read(wake_fd, &counter, sizeof(counter));
+}
+
 void auth_init(user_store_t* store) {
   g_user_store = store;
+  reset_wake_fd();
   pthread_mutex_lock(&lock);
   auth_wipe(requests, sizeof(requests));  // may still hold passwords
   auth_wipe(results, sizeof(results));

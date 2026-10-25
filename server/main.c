@@ -98,6 +98,8 @@ int main(int argc, char* argv[]) {
     goto cleanup_and_exit;
   }
 
+  poll_mgr_set_wake_fd(&mgr, auth_wake_fd());
+
   chat_init(&chat);
 
   rc = poll_mgr_run(&mgr, chat_callbacks(&chat));

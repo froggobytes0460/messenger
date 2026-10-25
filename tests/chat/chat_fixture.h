@@ -98,7 +98,8 @@ static inline int teardown(void** state) {
   return 0;
 }
 
-/// Connects client @p i: a socket pair registered in the manager as slot i + 1.
+/// Connects client @p i: a socket pair registered in the manager after the
+/// reserved slots.
 static inline void connect_client(fixture_t* f, int i) {
   int sv[2];
   assert_int_equal(socketpair(AF_UNIX, SOCK_STREAM, 0, sv), 0);
@@ -106,10 +107,11 @@ static inline void connect_client(fixture_t* f, int i) {
   f->peer[i] = sv[1];
   assert_int_equal(
       fcntl(f->fd[i], F_SETFL, fcntl(f->fd[i], F_GETFL) | O_NONBLOCK), 0);
-  f->mgr.fds[i + 1].fd = f->fd[i];
-  f->mgr.fds[i + 1].events = POLLIN;
-  if (f->mgr.nfds < (size_t)i + 2) {
-    f->mgr.nfds = (size_t)i + 2;
+  size_t at = POLL_MGR_FIRST_CLIENT_SLOT + (size_t)i;
+  f->mgr.fds[at].fd = f->fd[i];
+  f->mgr.fds[at].events = POLLIN;
+  if (f->mgr.nfds < at + 1) {
+    f->mgr.nfds = at + 1;
   }
   f->cb.on_connection(f->cb.ctx, &f->mgr, f->fd[i]);
 }

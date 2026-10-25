@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/poll.h>
@@ -70,7 +71,7 @@ static int queue_bytes(outbuf_t* out, const char* buf, size_t len) {
 }
 
 static ssize_t find_index(const poll_mgr_t* mgr, int sockfd) {
-  for (size_t i = 1; i < mgr->nfds; i++) {
+  for (size_t i = POLL_MGR_FIRST_CLIENT_SLOT; i < mgr->nfds; i++) {
     if (mgr->fds[i].fd == sockfd) {
       return (ssize_t)i;
     }
@@ -128,7 +129,7 @@ static void handle_new_connection(poll_mgr_t* mgr,
     if (out_of_resources) {
       // The pending connection stays queued, so the listening socket would
       // stay readable and spin the loop. Stop polling it until the next wake.
-      mgr->fds[0].events = 0;
+      mgr->fds[POLL_MGR_LISTEN_SLOT].events = 0;
     }
     return;
   }
@@ -138,7 +139,7 @@ static void handle_new_connection(poll_mgr_t* mgr,
     return;
   }
 
-  if (mgr->nfds < MAX_CONNECTIONS + 1) {
+  if (mgr->nfds < POLL_MGR_SLOTS) {
     mgr->fds[mgr->nfds].fd = client_fd;
     mgr->fds[mgr->nfds].events = POLLIN;
     mgr->fds[mgr->nfds].revents = 0;
@@ -221,12 +222,29 @@ static bool handle_client_writable(poll_mgr_t* mgr, size_t index) {
   return false;
 }
 
+/// Resets the wake fd's counter so it stops being readable. Its value is
+/// irrelevant: one wake means "check for work", however many writes happened.
+static void drain_wake_fd(int wake_fd) {
+  uint64_t counter = 0;
+  ssize_t n;
+  do {
+    n = read(wake_fd, &counter, sizeof(counter));
+  } while (n == -1 && errno == EINTR);  // NOLINT(misc-include-cleaner)
+}
+
 static void dispatch_events(poll_mgr_t* mgr, char* buf, size_t buf_size,
                             const poll_callback_t* callbacks) {
   size_t i = 0;
   while (i < mgr->nfds) {
     unsigned short revents = (unsigned short)mgr->fds[i].revents;
 
+    if (i == POLL_MGR_WAKE_SLOT) {
+      if (revents & POLLIN) {
+        drain_wake_fd(mgr->fds[i].fd);
+      }
+      i++;
+      continue;
+    }
     if (mgr->fds[i].fd == mgr->listen_fd) {
       if (revents & POLLIN) {
         handle_new_connection(mgr, callbacks);
@@ -270,7 +288,7 @@ static void flush_before_close(poll_mgr_t* mgr, size_t index) {
 }
 
 static void sweep_closed(poll_mgr_t* mgr, const poll_callback_t* callbacks) {
-  for (size_t i = mgr->nfds - 1; i >= 1; i--) {
+  for (size_t i = mgr->nfds - 1; i >= POLL_MGR_FIRST_CLIENT_SLOT; i--) {
     if (mgr->closing[i]) {
       flush_before_close(mgr, i);
       remove_client(mgr, i, callbacks);
@@ -285,10 +303,16 @@ int poll_mgr_init(poll_mgr_t* mgr, int listen_fd) {
     return rc;
   }
   mgr->listen_fd = listen_fd;
-  mgr->fds[0].fd = listen_fd;  // First socket fd should be the listening one.
-  mgr->fds[0].events = POLLIN;
-  mgr->nfds = 1;
+  mgr->fds[POLL_MGR_LISTEN_SLOT].fd = listen_fd;
+  mgr->fds[POLL_MGR_LISTEN_SLOT].events = POLLIN;
+  mgr->fds[POLL_MGR_WAKE_SLOT].fd = -1;  // poll() ignores negative fds.
+  mgr->fds[POLL_MGR_WAKE_SLOT].events = POLLIN;
+  mgr->nfds = POLL_MGR_FIRST_CLIENT_SLOT;
   return 0;
+}
+
+void poll_mgr_set_wake_fd(poll_mgr_t* mgr, int wake_fd) {
+  mgr->fds[POLL_MGR_WAKE_SLOT].fd = wake_fd;
 }
 
 void poll_mgr_request_stop(void) { stop_requested = 1; }
@@ -305,7 +329,8 @@ int poll_mgr_run(poll_mgr_t* mgr, poll_callback_t callbacks) {
       log_perror("poll");
       return EX_OSERR;
     }
-    mgr->fds[0].events = POLLIN;  // Resume accepting if accept() paused it.
+    mgr->fds[POLL_MGR_LISTEN_SLOT].events =
+        POLLIN;  // Resume accepting if accept() paused it.
 
     if (rc > 0) {
       dispatch_events(mgr, buf, sizeof(buf), &callbacks);

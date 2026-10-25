@@ -1,8 +1,10 @@
+#include <errno.h>
 #include <server/auth.h>
 #include <server/constants.h>
 #include <server/user_store.h>
 #include <stdbool.h>
 #include <string.h>
+#include <unistd.h>
 
 // clang-format off
 #include <cmocka.h>
@@ -275,6 +277,19 @@ static void test_collect_empty_leaves_out_untouched(void** state) {
   assert_memory_equal(&res, &before, sizeof(res));
 }
 
+/// The wake fd exists, is non-blocking, and keeps the same number across
+/// re-inits (the event loop holds on to it).
+static void test_wake_fd_is_stable_and_non_blocking(void** state) {
+  (void)state;
+  int fd = auth_wake_fd();
+  assert_true(fd >= 0);
+  uint64_t counter = 0;
+  assert_int_equal(read(fd, &counter, sizeof(counter)), -1);
+  assert_int_equal(errno, EAGAIN);
+  auth_init(NULL);
+  assert_int_equal(auth_wake_fd(), fd);
+}
+
 static void test_queue_full_and_order(void** state) {
   (void)state;
   // One extra UUID for the request that overflows the queue.
@@ -348,6 +363,7 @@ int main(void) {
       TEST(test_ring_wraps_with_queued_results),
       TEST(test_result_echoes_request),
       TEST(test_collect_empty_leaves_out_untouched),
+      TEST(test_wake_fd_is_stable_and_non_blocking),
       TEST(test_queue_full_and_order),
   };
 
