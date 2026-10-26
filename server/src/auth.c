@@ -44,6 +44,13 @@ static size_t results_count = 0;  ///< Results currently stored
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static size_t in_flight = 0;  ///< Count of requests popped but not pushed yet.
 
+// NOLINTNEXTLINE(misc-include-cleaner)
+static pthread_cond_t has_work = PTHREAD_COND_INITIALIZER;
+// NOLINTNEXTLINE(misc-include-cleaner)
+static pthread_t worker;
+static bool worker_running = false;
+static bool stopping = false;  /// Guarded by @ref lock
+
 /// @note Caller must hold lock.
 static void push_request(const auth_req_t* req) {
   memcpy(&requests[requests_tail], req, sizeof(*req));
@@ -141,15 +148,19 @@ static void process_request(const auth_req_t* req, auth_result_t* out) {
   }
 }
 
-static void run_pending(void) {
+static void* worker_main(void* arg) {
+  (void)arg;
   for (;;) {
     auth_req_t req;
     auth_result_t result;
 
     pthread_mutex_lock(&lock);
-    if (requests_count == 0) {
+    while (requests_count == 0 && !stopping) {
+      pthread_cond_wait(&has_work, &lock);
+    }
+    if (stopping) {
       pthread_mutex_unlock(&lock);
-      return;
+      return NULL;
     }
     pop_request(&req);
     pthread_mutex_unlock(&lock);
@@ -160,6 +171,9 @@ static void run_pending(void) {
     pthread_mutex_lock(&lock);
     push_result(&result);
     pthread_mutex_unlock(&lock);
+
+    uint64_t one = 1;
+    (void)write(wake_fd, &one, sizeof(one));  // Wake `poll()`
   }
 }
 
@@ -194,7 +208,21 @@ static void reset_wake_fd(void) {
   (void)read(wake_fd, &counter, sizeof(counter));
 }
 
+void auth_shutdown(void) {
+  if (!worker_running) {
+    return;
+  }
+
+  pthread_mutex_lock(&lock);
+  stopping = true;
+  pthread_mutex_unlock(&lock);
+  pthread_cond_signal(&has_work);
+  pthread_join(worker, NULL);
+  worker_running = false;
+}
+
 void auth_init(user_store_t* store) {
+  auth_shutdown();  // no old worker may run while we reset its state.
   g_user_store = store;
   reset_wake_fd();
   pthread_mutex_lock(&lock);
@@ -203,12 +231,18 @@ void auth_init(user_store_t* store) {
   requests_head = requests_tail = requests_count = 0;
   results_head = results_tail = results_count = 0;
   in_flight = 0;
+  stopping = false;
   pthread_mutex_unlock(&lock);
   if (store &&
       crypto_pwhash_str(dummy_hash, "DUMMY-PASSWORD", strlen("DUMMY-PASSWORD"),
                         hash_ops, hash_mem) != 0) {
     log_error("dummy password hash generation failed");
   }
+  if (pthread_create(&worker, NULL, worker_main, NULL) != 0) {
+    log_error("couldn't start authentication worker");
+    return;
+  }
+  worker_running = true;
 }
 
 bool auth_submit(const auth_req_t* req) {
@@ -232,8 +266,8 @@ bool auth_submit(const auth_req_t* req) {
 
   push_request(req);
   pthread_mutex_unlock(&lock);
+  pthread_cond_signal(&has_work);
 
-  run_pending();
   return true;
 }
 

@@ -7,8 +7,19 @@
  *
  * The caller never learns the outcome from @ref auth_submit. It calls
  * @ref auth_collect later (for example on every tick) and gets one
- * @ref auth_result_t per accepted request. How the check is done (inline in the
- * calling thread today, a worker thread later) is hidden behind this interface.
+ * @ref auth_result_t per accepted request.
+ *
+ * The check (password hashing and the user store) runs on one worker thread, so
+ * the calling thread never blocks on it. The worker rings @ref auth_wake_fd
+ * when a result is ready, which lets an event loop sleep in poll() until then.
+ *
+ * Typical use: @ref auth_init once, @ref auth_submit per request, wait for
+ * @ref auth_wake_fd, drain with @ref auth_collect, and @ref auth_shutdown
+ * before closing the user store.
+ *
+ * All functions except @ref auth_init, @ref auth_shutdown and
+ * @ref auth_set_hash_cost may be called from any thread; those three must be
+ * called from one thread (the one that owns the event loop).
  *
  * @warning An @ref auth_req_t holds a plaintext password. Never log it.
  */
@@ -64,13 +75,37 @@ typedef struct {
 } auth_result_t;
 
 /**
- * @brief Sets the user store used for registration and login.
+ * @brief Stops the worker thread and waits for it to exit.
  *
- * The store is borrowed, not owned: the caller keeps it open while it is set
- * and closes it afterwards. Any queued requests and results are discarded.
+ * A request the worker is already processing is finished first; requests still
+ * queued are discarded and get no result. Does nothing if no worker is running,
+ * so it is safe to call twice.
+ *
+ * Results already produced stay available to @ref auth_collect. The wake fd
+ * stays open.
+ *
+ * @note Call it before the user store is closed: the worker uses the store.
+ */
+void auth_shutdown(void);
+
+/**
+ * @brief Sets the user store and starts the worker thread.
+ *
+ * Stops any previous worker first (see @ref auth_shutdown), then discards all
+ * queued requests and results, creates the wake fd on the first call, builds
+ * the dummy hash and starts a new worker. Calling it again is allowed: it
+ * restarts everything with the new store.
+ *
+ * The store is borrowed, not owned: the caller keeps it open while it is set,
+ * calls @ref auth_shutdown, and only then closes it.
  *
  * @param[in] store An already opened user store, or `NULL` to detach the
- * current one (requests then end as @ref AUTH_INTERNAL).
+ * current one (requests then end as @ref AUTH_INTERNAL). A worker is started
+ * either way.
+ *
+ * @note Call @ref auth_set_hash_cost before this, not after.
+ * @note If the worker cannot be started an error is logged and submitted
+ * requests will never get a result.
  */
 void auth_init(user_store_t* store);
 
@@ -78,9 +113,13 @@ void auth_init(user_store_t* store);
  * @brief Descriptor that becomes readable when a result may be waiting.
  *
  * Create-once: @ref auth_init makes it (a non-blocking eventfd) and keeps it
- * for the life of the process. Add it to the event loop with
- * @c poll_mgr_set_wake_fd so a worker thread can wake the loop; the loop
- * drains it. The caller must not close it.
+ * for the life of the process, so the number stays valid across re-inits. The
+ * worker writes to it after every finished request. Add it to the event loop
+ * with @c poll_mgr_set_wake_fd so the loop wakes up; the loop drains it, then
+ * calls @ref auth_collect until it returns false. The caller must not close it.
+ *
+ * A readable fd means "a result may be waiting", not "exactly one": several
+ * results can share one wake-up, and a wake-up can find none.
  *
  * @return The descriptor, or -1 before @ref auth_init or if it could not be
  * created.
@@ -90,25 +129,32 @@ int auth_wake_fd(void);
 /**
  * @brief Submits an authentication request.
  *
- * The outcome is delivered through @ref auth_collect, never by this call.
- * Today the check runs inside this call, so the result is already waiting; do
- * not rely on that, since a worker thread may take over later. Every request
- * accepted here produces exactly one result.
+ * Only validates and queues the request, then wakes the worker; it returns
+ * immediately and never hashes. The outcome arrives later through
+ * @ref auth_collect, usually after @ref auth_wake_fd becomes readable. Every
+ * request accepted here produces exactly one result, unless
+ * @ref auth_shutdown or @ref auth_init discards it first.
  *
  * Results stay queued until collected. Once @ref AUTH_QUEUE_CAP requests are
- * pending or uncollected, further submits return false, so call
+ * pending, in progress or uncollected, further submits return false, so call
  * @ref auth_collect regularly (for example on every tick).
  *
  * @param[in] req The request. Copied; not kept after the call returns.
  * @return true if the request was accepted (a result will follow), false if it
- * was rejected (for example the queue is full) and no result will follow.
+ * was rejected (null, unterminated fields, or the queue is full) and no result
+ * will follow.
  *
- * @pre @ref auth_init must be used beforehand to set the internal user store.
+ * @pre @ref auth_init must have been called.
  */
 bool auth_submit(const auth_req_t* req);
 
 /**
  * @brief Takes the oldest finished result, if any.
+ *
+ * Never blocks: it returns false at once when nothing is ready. Results come
+ * back in the order the requests were finished, which is the order they were
+ * submitted (there is one worker). Call it in a loop until it returns false.
+ *
  * @param[out] out Filled when a result is returned, untouched otherwise.
  * @return true if @p out was filled, false if no result is ready.
  */

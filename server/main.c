@@ -72,6 +72,7 @@ int main(int argc, char* argv[]) {
   int listen_fd = -1;
   rc = get_main_socket(cli_args.ipString, cli_args.portNumber, &listen_fd);
   if (rc != 0) {
+    auth_shutdown();
     user_store_close(user_store);
     log_close();
     return rc;
@@ -107,6 +108,7 @@ int main(int argc, char* argv[]) {
 
 cleanup_and_exit:
   close(listen_fd);
+  auth_shutdown();
   user_store_close(user_store);
   log_close();
   return rc;
