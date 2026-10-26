@@ -90,6 +90,7 @@ static void test_stale_result_is_ignored(void** state) {
   say(f, 0, "REGISTER alice pw\n");
   f->cb.on_disconnection(f->cb.ctx, &f->mgr, f->fd[0]);
   assert_false(f->chat.clients[0].active);
+  assert_true(wait_for_auth(AUTH_WAIT_MS));  // the orphaned result arrives
   tick(f);
   expect_silence(f, 0);
 
@@ -98,6 +99,7 @@ static void test_stale_result_is_ignored(void** state) {
   say(f, 1, "REGISTER bob pw\n");
   f->cb.on_disconnection(f->cb.ctx, &f->mgr, f->fd[1]);
   connect_client(f, 2);
+  assert_true(wait_for_auth(AUTH_WAIT_MS));
   tick(f);
   expect_silence(f, 2);
   assert_int_equal(slot(f, 2)->state, CLIENT_CONNECTED);

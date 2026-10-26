@@ -6,6 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "auth_wait.h"
+
 // clang-format off
 #include <cmocka.h>
 #include <setjmp.h> // IWYU pragma: keep
@@ -40,7 +42,7 @@ static auth_result_t run(auth_kind_t kind, const char* user, uint32_t id) {
   auth_req_t req = make_req(kind, user, id);
   assert_true(auth_submit(&req));
   auth_result_t res;
-  assert_true(auth_collect(&res));
+  assert_true(collect_wait(&res, AUTH_WAIT_MS));
   return res;
 }
 
@@ -52,7 +54,7 @@ static auth_result_t run_pw(auth_kind_t kind, const char* user,
   strncpy(req.password, pass, MAX_PASSWORD);
   assert_true(auth_submit(&req));
   auth_result_t res;
-  assert_true(auth_collect(&res));
+  assert_true(collect_wait(&res, AUTH_WAIT_MS));
   return res;
 }
 
@@ -234,7 +236,7 @@ static void test_ring_wraps_with_queued_results(void** state) {
     assert_true(auth_submit(&req));
   }
   for (uint32_t i = 0; i < TAKEN; i++) {
-    assert_true(auth_collect(&res));
+    assert_true(collect_wait(&res, AUTH_WAIT_MS));
   }
   for (uint32_t i = 0; i < TAKEN; i++) {  // refill the freed slots
     uuid_from_int(req.client_id, AUTH_QUEUE_CAP + i);
@@ -245,7 +247,7 @@ static void test_ring_wraps_with_queued_results(void** state) {
   for (uint32_t i = TAKEN; i < AUTH_QUEUE_CAP + TAKEN; i++) {
     client_uuid_t want;
     uuid_from_int(want, i);
-    assert_true(auth_collect(&res));
+    assert_true(collect_wait(&res, AUTH_WAIT_MS));
     assert_memory_equal(res.client_id, want, sizeof(client_uuid_t));
   }
   assert_false(auth_collect(&res));
@@ -309,14 +311,14 @@ static void test_queue_full_and_order(void** state) {
   // Results come back oldest first.
   auth_result_t res;
   for (int i = 0; i < AUTH_QUEUE_CAP; i++) {
-    assert_true(auth_collect(&res));
+    assert_true(collect_wait(&res, AUTH_WAIT_MS));
     assert_true(memcmp(res.client_id, uuids[i], sizeof(client_uuid_t)) == 0);
   }
   assert_false(auth_collect(&res));
 
   // The ring wraps and is usable again.
   assert_true(auth_submit(&req));
-  assert_true(auth_collect(&res));
+  assert_true(collect_wait(&res, AUTH_WAIT_MS));
   assert_true(
       memcmp(res.client_id, uuids[AUTH_QUEUE_CAP], sizeof(client_uuid_t)) == 0);
 }
@@ -334,7 +336,7 @@ static int setup_tests(void** state) {
 }
 
 static int teardown_tests(void** state) {
-  auth_init(NULL);  // Refresh the authentication user store
+  auth_shutdown();  // join the worker before the store goes away
   user_store_close(*state);
   return 0;
 }

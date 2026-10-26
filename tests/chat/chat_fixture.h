@@ -21,6 +21,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "../auth_wait.h"
+
 // clang-format off
 #include <cmocka.h>
 #include <setjmp.h> // IWYU pragma: keep
@@ -92,7 +94,7 @@ static inline int teardown(void** state) {
     }
   }
   close(f->listen_fd);
-  auth_init(NULL);
+  auth_shutdown();  // join the worker before the store goes away
   user_store_close(f->store);
   free(f);
   return 0;
@@ -121,7 +123,28 @@ static inline void say(fixture_t* f, int i, const char* text) {
   f->cb.on_message(f->cb.ctx, &f->mgr, f->fd[i], text, strlen(text));
 }
 
-static inline void tick(fixture_t* f) { f->cb.on_tick(f->cb.ctx, &f->mgr); }
+static inline bool any_authenticating(fixture_t* f) {
+  for (size_t n = 0; n < MAX_CONNECTIONS; n++) {
+    if (f->chat.clients[n].active &&
+        f->chat.clients[n].state == CLIENT_AUTHENTICATING) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Runs `on_tick`. Auth results arrive from the worker thread, so while a
+/// client is AUTHENTICATING this first waits for the wake fd, then keeps
+/// ticking as long as more results are already ready.
+static inline void tick(fixture_t* f) {
+  if (any_authenticating(f)) {
+    (void)wait_for_auth(AUTH_WAIT_MS);
+  }
+  f->cb.on_tick(f->cb.ctx, &f->mgr);
+  while (any_authenticating(f) && wait_for_auth(0)) {
+    f->cb.on_tick(f->cb.ctx, &f->mgr);
+  }
+}
 
 /// Reads whatever the server has sent to client @p i (empty if nothing).
 static inline void read_reply(fixture_t* f, int i, char* buf, size_t size) {
