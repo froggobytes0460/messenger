@@ -105,6 +105,12 @@
       "description": "Run the tests under ThreadSanitizer.",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "repeat": {
+          "mode": "until-fail",
+          "count": 20
+        }
       }
     },
     {
