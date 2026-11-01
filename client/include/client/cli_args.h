@@ -1,6 +1,8 @@
 #ifndef CLI_ARGS_H
 #define CLI_ARGS_H
 
+#include <stdbool.h>
+
 /**
  * @file cli_args.h
  * @brief Handles CLI arguments for program.
@@ -14,12 +16,15 @@
  * @brief Parsed arguments from CLI
  */
 struct parsed_args {
+  /// Verbosity of program; to include debug log statements or not.
+  bool verbosity;
   unsigned short port;  ///< The port number to connect to.
   unsigned timeout;     ///< The time (in seconds) to wait while connecting.
   /// Number of times failure before connnection is handled before dropping.
   unsigned retry;
   const char* host_ip;   ///< The IP address of host server.
   const char* username;  ///< Username of client.
+  const char* log_file;  ///< Path to log file.
 };
 
 /**

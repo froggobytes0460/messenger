@@ -3,6 +3,7 @@
 #include <compact/getopt.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,14 +11,16 @@
 
 #define DECIMAL_INTEGER_BASE 10
 
-static const char optstring[] = "s:p:u:t:r:h";
+static const char optstring[] = "s:p:u:t:r:hv";
 static struct option long_options[] = {
     {"server", required_argument, NULL, 's'},
+    {"log-file", required_argument, NULL, 'l'},
     {"port", required_argument, NULL, 'p'},
     {"username", required_argument, NULL, 'u'},
     {"timeout", required_argument, NULL, 't'},
     {"retry", required_argument, NULL, 'r'},
     {"help", no_argument, NULL, 'h'},
+    {"verbose", no_argument, NULL, 'v'},
     {0, 0, 0, 0},
 };
 
@@ -40,6 +43,8 @@ static void print_usage(const char* prog_name) {
   printf("OPTIONS\n");
   printf("    -s, --server <ip>\n");
   printf("        Server IP address.\n");
+  printf("    -l, --log-file <path>\n");
+  printf("        Path to log file.\n");
   printf("    -p, --port <port>\n");
   printf("        Server port number.\n");
   printf("    -u, --username <name>\n");
@@ -48,6 +53,8 @@ static void print_usage(const char* prog_name) {
   printf("        Timeout for server connections in seconds.\n");
   printf("    -r, --retry <number>\n");
   printf("        Number of retries allowed for server connections.\n");
+  printf("    -v, --verbose\n");
+  printf("        Flag to set log verbosity (includes debug statements).\n");
   printf("    -h, --help\n");
   printf("        Print this help menu and exit.\n");
 }
@@ -70,6 +77,9 @@ int parse_args(struct parsed_args* out, int argc, const char* argv[]) {
     switch (opt) {
       case 's':
         out->host_ip = optarg;
+        break;
+      case 'l':
+        out->log_file = optarg;
         break;
       case 'u':
         out->username = optarg;
@@ -98,6 +108,9 @@ int parse_args(struct parsed_args* out, int argc, const char* argv[]) {
           return EX_USAGE;
         }
         out->retry = (unsigned)parsed_retry;
+        break;
+      case 'v':
+        out->verbosity = true;
         break;
       case 'h':
         print_usage(argv[0]);

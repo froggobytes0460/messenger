@@ -1,5 +1,6 @@
 add_library(client_core STATIC
   src/cli_args.c
+  src/log.c
   src/compact/getopt.c
   src/compact/getopt.h
 )
